@@ -15,9 +15,9 @@ This Home Assistant add-on fetches data from SAJ microinverters directly from th
 ## Prerequisites
 
 1.  **Home Assistant:** A working Home Assistant installation.
-2.  **MQTT Broker:** An MQTT broker configured and running, accessible by Home Assistant. The official [Mosquitto broker](https://github.com/home-assistant/add-ons/blob/master/mosquitto/README.md) add-on is recommended.
+2.  **MQTT Broker:** An MQTT broker configured and running, accessible by Home Assistant. The official [Mosquitto broker](https://github.com/home-assistant/addons/tree/master/mosquitto) add-on is recommended.
 3.  **MQTT Credentials:** If your MQTT broker requires authentication, you will need the username and password. If using the Mosquitto add-on with the default integration, the Supervisor can provide the credentials automatically.
-4.  **SAJ Portal Credentials:** Your username and password to access the [eSolar Portal (SAJ)](https://www.esolarportal.com/).
+4.  **SAJ Portal Credentials:** Your username and password to access the [eSolar Portal (SAJ)](https://iop.saj-electric.com/login).
 
 ## Installation
 
