@@ -1,0 +1,22 @@
+{
+  "name": "SAJ Portal Web Crawler",
+  "version": "1.0.3",
+  "slug": "saj_portal_web_crawler",
+  "description": "Fetches data from SAJ Portal using web scraping and publishes via MQTT.",
+  "arch": [
+    "aarch64",
+    "amd64",
+    "armv7"
+  ],
+  "init": false,
+  "map": [
+    "data:rw"
+  ],
+  "services": [
+    "mqtt:want"
+  ],
+  "hassio_api": true,
+  "host_network": true,
+  "startup": "application",
+  "boot": "auto"
+}

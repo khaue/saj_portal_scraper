@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
+name: SAJ Portal Web Crawler Add-on Repository
+url: "https://github.com/khaue/saj_portal_web_crawler"
+maintainer: "Khaue Rezende Rodrigues <khaue.rodrigues@gmail.com>"

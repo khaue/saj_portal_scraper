@@ -1,0 +1,60 @@
+# Add-on Configuration
+name: "SAJ Portal Web Crawler"
+version: "1.0.3"
+slug: saj_portal_web_crawler
+description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
+arch:
+  - aarch64
+  - amd64
+  - armv7
+icon: icon.png
+logo: logo.png
+ports:
+  5678/tcp: 5678 # Mapeia a porta 5678 TCP do container para a porta 5678 do host
+ports_description: # Opcional, mas bom para documentar
+  5678/tcp: Python Debugger (debugpy)
+boot: auto
+hassio_api: true
+#host_network: true
+# Add other supported architectures
+init: false # Add-on runs as a service
+options: # User-configurable options
+  log_level: "info"
+  timezone: "Etc/UTC"
+  saj_username: ""
+  saj_password: ""
+  # Keep microinverters as a string for simplicity in config UI
+  microinverters: "YOUR_SN1:Alias1,YOUR_SN2:Alias2"
+  inactivity_enabled: true
+  inactivity_start_time: "21:00"
+  inactivity_end_time: "05:30"
+  update_interval_seconds: 240
+  data_inactivity_threshold_seconds: 1800 # Default 30 minutes (valor padrão)
+  extended_update_interval_seconds: 3600 # Default 1 hour (valor padrão)
+  # MQTT Configuration (Optional - can often rely on Supervisor-provided)
+  mqtt_host: "core-mosquitto"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+schema: # Defines the UI for the options
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  timezone: str
+  saj_username: str
+  saj_password: password # Use 'password' type for masking
+  microinverters: str
+  inactivity_enabled: bool
+  inactivity_start_time: str # Keep as string, validate in run.py
+  inactivity_end_time: str # Keep as string, validate in run.py
+  update_interval_seconds: int
+  data_inactivity_threshold_seconds: int # Opcional, inteiro >= 1
+  extended_update_interval_seconds: int # Opcional, inteiro >= 60
+  mqtt_host: str
+  mqtt_port: int
+  mqtt_username: str
+  mqtt_password: password
+# Optional: Request access to the Supervisor-provided MQTT service
+services:
+  - mqtt:need # Request access to the MQTT service managed by Supervisor
+# Optional: Define persistent data path
+map:
+  - data:rw # Map /data directory for persistent state (peak power)
