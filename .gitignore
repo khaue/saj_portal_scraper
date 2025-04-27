@@ -8,14 +8,14 @@
 !/.gitignore
 
 # 3. Não ignore a pasta do seu addon e o que tem dentro
-!/saj_portal_web_crawler/
-!/saj_portal_web_crawler/**
+!/saj_portal_scraper/
+!/saj_portal_scraper/**
 
 # 4. Mesmo assim, ignore coisas específicas dentro da pasta liberada
 # (por exemplo: __pycache__, arquivos .pyc, etc.)
-saj_portal_web_crawler/__pycache__/
-saj_portal_web_crawler/*.py[cod]
-saj_portal_web_crawler/*$py.class
+saj_portal_scraper/__pycache__/
+saj_portal_scraper/*.py[cod]
+saj_portal_scraper/*$py.class
 
 # 5. Ignore também outras pastas e arquivos padrões que não quer subir
 *.log

@@ -1,4 +1,4 @@
-# SAJ Portal Web Crawler - Home Assistant Add-on
+# SAJ Portal Scraper - Home Assistant Add-on
 
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]][license]
@@ -25,11 +25,11 @@ This Home Assistant add-on fetches data from SAJ microinverters directly from th
     - Go to your Home Assistant interface.
     - Navigate to **Settings** > **Add-ons** > **Add-on Store**.
     - Click the three-dots menu in the top right corner and select **Repositories**.
-    - Paste the URL of this Git repository (`https://github.com/khaue/saj_portal_web_crawler`) into the field and click **Add**.
+    - Paste the URL of this Git repository (`https://github.com/khaue/saj_portal_scraper`) into the field and click **Add**.
     - Close the repositories window.
 2.  **Install Add-on:**
     - Refresh the Add-on Store page (you might need to reload with Ctrl+Shift+R or Cmd+Shift+R).
-    - Look for "SAJ Portal Web Crawler" in the local repositories section (the name defined in `repository.yaml`).
+    - Look for "SAJ Portal Scraper" in the local repositories section (the name defined in `repository.yaml`).
     - Click on the add-on and then **Install**. Wait for the installation to complete.
 
 ## Configuration
@@ -86,13 +86,13 @@ Distributed under the MIT License. See `LICENSE` for more information
 
 Issues and Pull Requests are welcome. Please open an issue in this repository to report bugs or suggest improvements. Contact: Khaue Rezende Rodrigues <khaue.rodrigues@gmail.com>
 
-[commits-shield]: https://img.shields.io/github/commit-activity/y/khaue/saj_portal_web_crawler.svg?style=for-the-badge
-[commits]: https://github.com/khaue/saj_portal_web_crawler/commits/main
-[issues-shield]: https://img.shields.io/github/issues/khaue/saj_portal_web_crawler.svg?style=for-the-badge
-[issues]: https://github.com/khaue/saj_portal_web_crawler/issues
-[license-shield]: https://img.shields.io/github/license/khaue/saj_portal_web_crawler.svg?style=for-the-badge
+[commits-shield]: https://img.shields.io/github/commit-activity/y/khaue/saj_portal_scraper.svg?style=for-the-badge
+[commits]: https://github.com/khaue/saj_portal_scraper/commits/main
+[issues-shield]: https://img.shields.io/github/issues/khaue/saj_portal_scraper.svg?style=for-the-badge
+[issues]: https://github.com/khaue/saj_portal_scraper/issues
+[license-shield]: https://img.shields.io/github/license/khaue/saj_portal_scraper.svg?style=for-the-badge
 [license]: LICENSE
 [maintainer-shield]: https://img.shields.io/badge/maintainer-Khaue%20Rezende%20Rodrigues-blue.svg?style=for-the-badge
 [maintainer]: https://github.com/khaue
-[releases-shield]: https://img.shields.io/github/release/khaue/saj_portal_web_crawler.svg?style=for-the-badge
-[releases]: https://github.com/khaue/saj_portal_web_crawler/releases
+[releases-shield]: https://img.shields.io/github/release/khaue/saj_portal_scraper.svg?style=for-the-badge
+[releases]: https://github.com/khaue/saj_portal_scraper/releases

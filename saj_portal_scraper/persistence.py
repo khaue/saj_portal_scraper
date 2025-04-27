@@ -1,4 +1,4 @@
-# /workspaces/addons/saj_portal_web_crawler/persistence.py
+# /workspaces/addons/saj_portal_scraper/persistence.py
 import json
 import logging
 from datetime import date

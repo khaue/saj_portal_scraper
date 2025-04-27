@@ -1,4 +1,4 @@
-# /workspaces/addons/saj_portal_web_crawler/mqtt_utils.py
+# /workspaces/addons/saj_portal_scraper/mqtt_utils.py
 import paho.mqtt.client as mqtt
 import json
 import logging

@@ -26,7 +26,7 @@ from const import (
     DEFAULT_DATA_INACTIVITY_THRESHOLD,
     DEFAULT_EXTENDED_UPDATE_INTERVAL,
 )
-import web_crawler
+import saj_portal_scraper.web_scraper as web_scraper
 import utils
 import mqtt_utils
 import persistence
@@ -146,7 +146,7 @@ def run_cycle():
      if not webdriver:
          try:
              _LOGGER.info("WebDriver not active. Attempting to validate connection and log in...")
-             webdriver = web_crawler.validate_connection(CONFIG)
+             webdriver = web_scraper.validate_connection(CONFIG)
              _LOGGER.info("Connection validated and logged in successfully.")
          except (ValueError, RuntimeError, Exception) as e:
              _LOGGER.error(f"Failed to establish WebDriver connection or log in: {e}. Will retry next cycle.")
@@ -159,7 +159,7 @@ def run_cycle():
      # Fetch Data
      try:
          _LOGGER.info("Fetching microinverter data...")
-         device_data = web_crawler._fetch_data_sync(CONFIG, webdriver)
+         device_data = web_scraper._fetch_data_sync(CONFIG, webdriver)
 
          if not device_data:
              _LOGGER.warning("No device data fetched in this cycle.")
@@ -262,7 +262,7 @@ def run_cycle():
                try: webdriver.quit()
                except: pass
           webdriver = None
-     except (web_crawler.WebDriverException, web_crawler.TimeoutException) as e: # Selenium errors
+     except (web_scraper.WebDriverException, web_scraper.TimeoutException) as e: # Selenium errors
           _LOGGER.error(f"Selenium error during data fetch: {e}. WebDriver might be stale.")
           if webdriver:
                try: webdriver.quit()
@@ -274,12 +274,13 @@ def run_cycle():
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    _LOGGER.info("Starting SAJ Portal Web Crawler Add-on...")
+    _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
     load_config()
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
 
-    client_id = f"saj-portal-addon-{os.getpid()}"
+    client_id = f"{DOMAIN}-addon-{os.getpid()}"
+
     mqtt_client = mqtt_utils.connect_mqtt(client_id, CONFIG)
     if not mqtt_client:
         _LOGGER.warning("Initial MQTT connection failed. Will retry within the loop.")
@@ -340,6 +341,6 @@ if __name__ == "__main__":
     # Shutdown
     _LOGGER.info("Shutdown requested. Exiting main loop.")
     cleanup()
-    _LOGGER.info("SAJ Portal Web Crawler Add-on stopped.")
+    _LOGGER.info("SAJ Portal Scraper Add-on stopped.")
     sys.exit(0)
 

@@ -1,8 +1,8 @@
-# /workspaces/addons/saj_portal_web_crawler/const.py
-"""Constants for the SAJ Portal Web Crawler Add-on."""
+# /workspaces/addons/saj_portal_scraper/const.py
+"""Constants for the SAJ Portal Scraper Add-on."""
 
 # Add-on domain/slug
-DOMAIN = "saj_portal_web_crawler"
+DOMAIN = "saj_portal_scraper"
 
 # --- Configuration Defaults ---
 DEFAULT_USERNAME = ""

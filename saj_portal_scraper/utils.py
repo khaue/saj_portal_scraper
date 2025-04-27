@@ -1,4 +1,4 @@
-# /workspaces/addons/saj_portal_web_crawler/utils.py
+# /workspaces/addons/saj_portal_scraper/utils.py
 import logging
 from datetime import datetime, time, date
 
@@ -120,7 +120,7 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
                 if attribute == "Update_time" or attribute == "Server_Time":
                     if value_str:
                         try:
-                            # Assumes 'YYYY-MM-DDTHH:MM:SSZ' format from web_crawler
+                            # Assumes 'YYYY-MM-DDTHH:MM:SSZ' format from scraper
                             iso_format_string = "%Y-%m-%dT%H:%M:%SZ"
                             current_time_obj = datetime.strptime(value_str, iso_format_string)
 
