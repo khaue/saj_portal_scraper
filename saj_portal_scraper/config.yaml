@@ -1,6 +1,6 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.6"
+version: "1.0.7"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
