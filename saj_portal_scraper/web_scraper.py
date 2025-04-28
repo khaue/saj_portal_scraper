@@ -1,4 +1,4 @@
-# /workspaces/addons/saj_portal_scraper/web_crawler.py
+# /workspaces/addons/saj_portal_scraper/web_scraper.py
 import logging
 import time
 from datetime import datetime, timezone, timedelta
@@ -229,9 +229,10 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
                             num_values = len(values)
                             if num_channels == num_values:
                                 for i in range(num_channels):
-                                    channel_key = channel_values[i].strip()
+                                    # In web_scraper.py, around line 243
+                                    channel_key = channel_values[i].strip().upper() # Convert "pv1" to "PV1"
                                     if channel_key:
-                                        row_data[f"{channel_key}_{column_name}"] = values[i].strip()
+                                        row_data[f"{channel_key}_{column_name}"] = values[i].strip() # Now generates PV1_Panel_Voltage etc.
                             else:
                                 # If mismatch, store the raw value of the main column
                                 row_data[column_name] = raw_value
