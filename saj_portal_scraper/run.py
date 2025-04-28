@@ -229,6 +229,10 @@ def run_cycle():
                   try:
                       mqtt_utils.publish_discovery(mqtt_client, device_data, plant_data, {"value": current_peak_power, "last_reset_date": last_reset_date}, ADDON_VERSION)
                       _LOGGER.info("Initial MQTT discovery published successfully.")
+
+                      _LOGGER.info("Waiting 5 seconds for Home Assistant to process discovery...")
+                      time.sleep(5) # Adjust delay if needed
+
                       initial_setup_done = True
                       # Initialize timestamps after first successful discovery
                       _LOGGER.debug("Initializing last known update times and change timestamp.")
