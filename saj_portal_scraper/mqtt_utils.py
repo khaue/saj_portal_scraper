@@ -170,7 +170,7 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
             state_topic = f"{MQTT_BASE_TOPIC}/{sn}/state"
 
             payload = {
-                "name": f"{alias} {attribute.replace('_', ' ').title()}",
+                "name": f"{attribute.replace('_', ' ').title()}",
                 "unique_id": unique_id,
                 "state_topic": state_topic,
                 "value_template": f"{{{{ value_json.{attribute} | default('unknown') }}}}",
@@ -213,7 +213,7 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
 
         discovery_topic = f"{MQTT_DISCOVERY_PREFIX}/sensor/{unique_id}/config"
         payload = {
-            "name": f"{PLANT_DEVICE_NAME} {attribute.replace('_', ' ').title()}",
+            "name": f"{attribute.replace('_', ' ').title()}",
             "unique_id": unique_id,
             "state_topic": plant_state_topic,
             "value_template": f"{{{{ value_json.{attribute} | default('unknown') }}}}",
@@ -244,7 +244,7 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
         peak_discovery_topic = f"{MQTT_DISCOVERY_PREFIX}/sensor/{peak_unique_id}/config"
         peak_state_topic = f"{MQTT_BASE_TOPIC}/plant/peak_power_today"
         peak_payload = {
-            "name": f"{PLANT_DEVICE_NAME} {PEAK_POWER_TODAY_NAME}",
+            "name": PEAK_POWER_TODAY_NAME,
             "unique_id": peak_unique_id,
             "state_topic": peak_state_topic,
             "value_template": "{{ value_json.value | default(0) }}",

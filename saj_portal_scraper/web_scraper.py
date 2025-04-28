@@ -229,7 +229,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
                             num_values = len(values)
                             if num_channels == num_values:
                                 for i in range(num_channels):
-                                    channel_key = channel_values[i].strip()
+                                    channel_key = channel_values[i].strip().upper()
                                     if channel_key:
                                         row_data[f"{channel_key}_{column_name}"] = values[i].strip()
                             else:
