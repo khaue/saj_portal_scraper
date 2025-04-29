@@ -9,6 +9,7 @@ import os
 from datetime import date, datetime
 
 from const import (
+    DOMAIN,
     MQTT_BASE_TOPIC,
     MQTT_AVAILABILITY_TOPIC,
     MQTT_PAYLOAD_ONLINE,
@@ -26,7 +27,7 @@ from const import (
     DEFAULT_DATA_INACTIVITY_THRESHOLD,
     DEFAULT_EXTENDED_UPDATE_INTERVAL,
 )
-import saj_portal_scraper.web_scraper as web_scraper
+import web_scraper
 import utils
 import mqtt_utils
 import persistence
@@ -347,4 +348,3 @@ if __name__ == "__main__":
     cleanup()
     _LOGGER.info("SAJ Portal Scraper Add-on stopped.")
     sys.exit(0)
-

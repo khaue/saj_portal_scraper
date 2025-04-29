@@ -143,50 +143,68 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
             # Avoid re-publishing discovery for entities already discovered in this session
             if unique_id in _DISCOVERED_ENTITIES: continue
 
-            unit = UNIT_MAPPING.get(attribute)
-            device_class = DEVICE_CLASS_MAPPING.get(attribute)
-            state_class = STATE_CLASS_MAPPING.get(attribute)
-            icon = None
+            unit = None
+            device_class = None
+            state_class = None
+            base_attribute = attribute # Default to the full attribute name
+            identified_panel_attribute = False
 
-            # Handle panel attributes (e.g., PV1_Panel_Power) to inherit base properties
-            base_attribute = attribute
-            if attribute.startswith("PV") and "_" in attribute:
-                 parts = attribute.split("_", 1)
-                 if len(parts) > 1:
-                      base_attribute = parts[1] # e.g., Panel_Power
-                      if not unit: unit = UNIT_MAPPING.get(base_attribute)
-                      if not device_class: device_class = DEVICE_CLASS_MAPPING.get(base_attribute)
-                      if not state_class: state_class = STATE_CLASS_MAPPING.get(base_attribute)
+            panel_suffixes = {
+                "_Panel_Voltage": "Panel_Voltage",
+                "_Panel_Current": "Panel_Current",
+                "_Panel_Power": "Panel_Power",
+            }
+
+            for suffix, base_name in panel_suffixes.items():
+                if attribute.endswith(suffix):
+                    base_attribute = base_name # Use the generic name for mapping lookup
+                    identified_panel_attribute = True
+                    break # Found the panel type
+
+            # Look up mappings using the determined base_attribute
+            unit = UNIT_MAPPING.get(base_attribute)
+            device_class = DEVICE_CLASS_MAPPING.get(base_attribute)
+            state_class = STATE_CLASS_MAPPING.get(base_attribute)
+            # --- MODIFICATION END ---
+
+            icon = None # Reset icon for each attribute
 
             # Skip attributes that don't map to a sensor property (unless it's a timestamp)
+            # This check now works correctly even if the panel prefix wasn't "PV"
             if unit is None and device_class is None and attribute not in ["Update_time", "Server_Time"]:
+                 _LOGGER.debug(f"Skipping discovery for {unique_id} due to missing unit and device_class (Base Attribute: {base_attribute}).")
                  continue
 
-            # Ensure timestamps have the correct device class
+            # Ensure timestamps have the correct device class (overrides mapping if needed)
             if attribute in ["Update_time", "Server_Time"]:
                  device_class = "timestamp"
 
             discovery_topic = f"{MQTT_DISCOVERY_PREFIX}/sensor/{unique_id}/config"
             state_topic = f"{MQTT_BASE_TOPIC}/{sn}/state"
 
+            # Use the ORIGINAL attribute name for the sensor name and value template
             payload = {
                 "name": f"{attribute.replace('_', ' ').title()}",
                 "unique_id": unique_id,
                 "state_topic": state_topic,
-                "value_template": f"{{{{ value_json.{attribute} | default('unknown') }}}}",
+                "value_template": f"{{{{ value_json.{attribute} | default('unknown') }}}}", # Uses original attribute
                 "device": device_info,
                 "availability_topic": MQTT_AVAILABILITY_TOPIC,
                 "payload_available": MQTT_PAYLOAD_ONLINE,
                 "payload_not_available": MQTT_PAYLOAD_OFFLINE,
-                "json_attributes_topic": state_topic, # Publish full state as attributes
+                "json_attributes_topic": state_topic,
                 "json_attributes_template": "{{ value_json | tojson }}",
             }
+            # Add properties based on mappings found using base_attribute
             if unit: payload["unit_of_measurement"] = unit
             if device_class: payload["device_class"] = device_class
             if state_class: payload["state_class"] = state_class
             if icon: payload["icon"] = icon
 
+            _LOGGER.debug(f"Discovery Check: For unique_id '{unique_id}', defining state_topic as: '{payload['state_topic']}'")
+
             try:
+                _LOGGER.debug(f"Attempting to publish discovery for {unique_id} (Base Attribute: {base_attribute}) with payload: {json.dumps(payload)}")
                 client.publish(discovery_topic, json.dumps(payload), qos=1, retain=True)
                 _DISCOVERED_ENTITIES.add(unique_id)
                 _LOGGER.debug(f"Published discovery for: {unique_id}")
@@ -279,12 +297,23 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
         try:
             update_time_val = data.get("Update_time", "N/A") # Use .get() with default for logging
             server_time_val = data.get("Server_Time", "N/A")
-            _LOGGER.debug(f"Publishing state for device {sn} to {state_topic}. Update_time='{update_time_val}', Server_Time='{server_time_val}'")
+            _LOGGER.debug(f"State Publish Check: Publishing state for device '{sn}' TO topic: '{state_topic}'. Update_time='{update_time_val}', Server_Time='{server_time_val}'")
+
+            # --- ADDED LOGGING ---
+            try:
+                json_payload = json.dumps(data)
+                _LOGGER.debug(f"State Publish Payload for {sn} TO {state_topic}: {json_payload}")
+            except (TypeError, ValueError) as json_err:
+                _LOGGER.error(f"Error serializing state data for {sn} to JSON: {json_err}. Data: {data}")
+                continue # Skip publishing if JSON fails
+            # --- END ADDED LOGGING ---
 
             # Publish the full data dictionary as JSON
-            client.publish(state_topic, json.dumps(data), qos=1, retain=False)
+            client.publish(state_topic, json_payload, qos=1, retain=False) # Use the generated json_payload
+
         except Exception as e:
-            _LOGGER.error(f"Failed to publish state for device {sn}: {e}")
+            # Catch errors during the publish call itself
+            _LOGGER.error(f"Failed to publish state for device {sn} TO {state_topic}: {e}")
 
     # Publish aggregated plant state
     plant_state_topic = f"{MQTT_BASE_TOPIC}/plant/state"
@@ -293,18 +322,43 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
         plant_server_time = plant_data.get("Server_Time", "N/A")
         _LOGGER.debug(f"Publishing aggregated plant state to {plant_state_topic}. Update_time='{plant_update_time}', Server_Time='{plant_server_time}'")
 
-        client.publish(plant_state_topic, json.dumps(plant_data), qos=1, retain=False)
+        # --- ADDED LOGGING ---
+        try:
+            json_payload_plant = json.dumps(plant_data)
+            _LOGGER.debug(f"State Publish Payload for Plant TO {plant_state_topic}: {json_payload_plant}")
+        except (TypeError, ValueError) as json_err:
+            _LOGGER.error(f"Error serializing plant state data to JSON: {json_err}. Data: {plant_data}")
+            json_payload_plant = None # Prevent publishing if JSON fails
+        # --- END ADDED LOGGING ---
+
+        if json_payload_plant: # Only publish if JSON serialization succeeded
+            client.publish(plant_state_topic, json_payload_plant, qos=1, retain=False)
+
     except Exception as e:
-        _LOGGER.error(f"Failed to publish plant state: {e}")
+        # Catch errors during the publish call itself
+        _LOGGER.error(f"Failed to publish plant state TO {plant_state_topic}: {e}")
 
     # Publish peak power state
     peak_state_topic = f"{MQTT_BASE_TOPIC}/plant/peak_power_today"
-    peak_payload = {
+    peak_payload_dict = { # Renamed variable for clarity
         "value": peak_power,
         "last_reset_date": last_reset_date.isoformat() if last_reset_date else None
     }
     try:
-        # Retain peak power state so it's available on HA restart
-        client.publish(peak_state_topic, json.dumps(peak_payload), qos=1, retain=True)
+
+        try:
+            json_payload_peak = json.dumps(peak_payload_dict)
+            _LOGGER.debug(f"State Publish Payload for Peak Power TO {peak_state_topic}: {json_payload_peak}")
+        except (TypeError, ValueError) as json_err:
+            _LOGGER.error(f"Error serializing peak power state data to JSON: {json_err}. Data: {peak_payload_dict}")
+            json_payload_peak = None # Prevent publishing if JSON fails
+
+
+        if json_payload_peak: # Only publish if JSON serialization succeeded
+            # Retain peak power state so it's available on HA restart
+            client.publish(peak_state_topic, json_payload_peak, qos=1, retain=True)
+
     except Exception as e:
-        _LOGGER.error(f"Failed to publish peak power state: {e}")
+        # Catch errors during the publish call itself
+        _LOGGER.error(f"Failed to publish peak power state TO {peak_state_topic}: {e}")
+

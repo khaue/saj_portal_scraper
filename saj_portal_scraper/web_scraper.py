@@ -1,4 +1,4 @@
-# /workspaces/addons/saj_portal_scraper/web_crawler.py
+# /workspaces/addons/saj_portal_scraper/web_scraper.py
 import logging
 import time
 from datetime import datetime, timezone, timedelta
