@@ -192,8 +192,8 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
                 "availability_topic": MQTT_AVAILABILITY_TOPIC,
                 "payload_available": MQTT_PAYLOAD_ONLINE,
                 "payload_not_available": MQTT_PAYLOAD_OFFLINE,
-                "json_attributes_topic": state_topic,
-                "json_attributes_template": "{{ value_json | tojson }}",
+              #  "json_attributes_topic": state_topic,
+              #  "json_attributes_template": "{{ value_json | tojson }}",
             }
             # Add properties based on mappings found using base_attribute
             if unit: payload["unit_of_measurement"] = unit
@@ -239,8 +239,8 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
             "availability_topic": MQTT_AVAILABILITY_TOPIC,
             "payload_available": MQTT_PAYLOAD_ONLINE,
             "payload_not_available": MQTT_PAYLOAD_OFFLINE,
-            "json_attributes_topic": plant_state_topic,
-            "json_attributes_template": "{{ value_json | tojson }}",
+           # "json_attributes_topic": plant_state_topic,
+           # "json_attributes_template": "{{ value_json | tojson }}",
         }
         if unit: payload["unit_of_measurement"] = unit
         if device_class: payload["device_class"] = device_class
@@ -322,14 +322,12 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
         plant_server_time = plant_data.get("Server_Time", "N/A")
         _LOGGER.debug(f"Publishing aggregated plant state to {plant_state_topic}. Update_time='{plant_update_time}', Server_Time='{plant_server_time}'")
 
-        # --- ADDED LOGGING ---
         try:
             json_payload_plant = json.dumps(plant_data)
             _LOGGER.debug(f"State Publish Payload for Plant TO {plant_state_topic}: {json_payload_plant}")
         except (TypeError, ValueError) as json_err:
             _LOGGER.error(f"Error serializing plant state data to JSON: {json_err}. Data: {plant_data}")
             json_payload_plant = None # Prevent publishing if JSON fails
-        # --- END ADDED LOGGING ---
 
         if json_payload_plant: # Only publish if JSON serialization succeeded
             client.publish(plant_state_topic, json_payload_plant, qos=1, retain=False)

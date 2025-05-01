@@ -6,6 +6,7 @@ import logging
 import signal
 import sys
 import os
+import subprocess # <-- ADDED for version checking
 from datetime import date, datetime
 
 from const import (
@@ -26,6 +27,8 @@ from const import (
     CONF_EXTENDED_UPDATE_INTERVAL,
     DEFAULT_DATA_INACTIVITY_THRESHOLD,
     DEFAULT_EXTENDED_UPDATE_INTERVAL,
+    FIREFOX_BINARY_PATH, # <-- ADDED for version checking
+    GECKODRIVER_PATH,    # <-- ADDED for version checking
 )
 import web_scraper
 import utils
@@ -54,6 +57,58 @@ last_data_change_timestamp: float | None = None # Monotonic time of the last dat
 using_extended_interval: bool = False # Flag indicating if the extended interval is active
 # --- End Global State ---
 
+# --- Function to Log Driver Versions ---
+def log_driver_versions():
+    """Logs the versions of Firefox and Geckodriver found."""
+    _LOGGER.info("--- Checking WebDriver Component Versions ---")
+
+    # Check Firefox Version
+    try:
+        if os.path.exists(FIREFOX_BINARY_PATH):
+            result = subprocess.run(
+                [FIREFOX_BINARY_PATH, '--version'],
+                capture_output=True, text=True, check=True, encoding='utf-8'
+            )
+            # Pega a primeira linha da saída, que geralmente contém a versão
+            version_line = result.stdout.strip().splitlines()[0]
+            _LOGGER.info(f"Firefox Version ({FIREFOX_BINARY_PATH}): {version_line}")
+        else:
+            _LOGGER.warning(f"Firefox binary not found at specified path: {FIREFOX_BINARY_PATH}")
+    except FileNotFoundError:
+         _LOGGER.error(f"Firefox command '{FIREFOX_BINARY_PATH}' not found in the system.")
+    except subprocess.CalledProcessError as e:
+        _LOGGER.error(f"Failed to get Firefox version. Command failed: {e}")
+        if e.stderr: _LOGGER.error(f"Stderr: {e.stderr.strip()}")
+    except Exception as e:
+        _LOGGER.error(f"An unexpected error occurred while checking Firefox version: {e}", exc_info=True)
+
+    # Check Geckodriver Version
+    try:
+        if os.path.exists(GECKODRIVER_PATH):
+            result = subprocess.run(
+                [GECKODRIVER_PATH, '--version'],
+                capture_output=True, text=True, check=True, encoding='utf-8'
+            )
+            # Geckodriver pode ter múltiplas linhas, a primeira geralmente tem a versão dele
+            version_line = result.stdout.strip().splitlines()[0]
+            _LOGGER.info(f"Geckodriver Version ({GECKODRIVER_PATH}): {version_line}")
+            # Logar também a segunda linha se existir (pode conter info do Firefox compatível)
+            if len(result.stdout.strip().splitlines()) > 1:
+                 _LOGGER.info(f"Geckodriver Info Line 2: {result.stdout.strip().splitlines()[1]}")
+        else:
+             _LOGGER.warning(f"Geckodriver binary not found at specified path: {GECKODRIVER_PATH}")
+    except FileNotFoundError:
+         _LOGGER.error(f"Geckodriver command '{GECKODRIVER_PATH}' not found in the system.")
+    except subprocess.CalledProcessError as e:
+        _LOGGER.error(f"Failed to get Geckodriver version. Command failed: {e}")
+        if e.stderr: _LOGGER.error(f"Stderr: {e.stderr.strip()}")
+    except Exception as e:
+        _LOGGER.error(f"An unexpected error occurred while checking Geckodriver version: {e}", exc_info=True)
+
+    _LOGGER.info("--- Finished Checking WebDriver Component Versions ---")
+# --- End Function to Log Driver Versions ---
+
+
 def handle_shutdown(signum, frame):
     global shutdown_requested
     _LOGGER.info(f"Received signal {signum}. Requesting shutdown...")
@@ -72,6 +127,11 @@ def load_config():
             log_level = CONFIG.get("log_level", DEFAULT_LOG_LEVEL).upper()
             logging.getLogger().setLevel(log_level)
             _LOGGER.info(f"Configuration loaded successfully. Log level set to {log_level}")
+
+            if log_level == "DEBUG":
+                _LOGGER.info("Setting log level for 'selenium' and 'urllib3' to WARNING to reduce noise.")
+                logging.getLogger("selenium").setLevel(logging.WARNING)
+                logging.getLogger("urllib3").setLevel(logging.WARNING)
 
             # Basic validation warnings
             if not CONFIG.get("saj_username"):
@@ -280,6 +340,10 @@ def run_cycle():
 # --- Main Execution ---
 if __name__ == "__main__":
     _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
+
+    # Log Firefox and Geckodriver versions at startup
+    log_driver_versions() # <-- ADDED CALL
+
     load_config()
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
@@ -289,6 +353,23 @@ if __name__ == "__main__":
     mqtt_client = mqtt_utils.connect_mqtt(client_id, CONFIG)
     if not mqtt_client:
         _LOGGER.warning("Initial MQTT connection failed. Will retry within the loop.")
+
+    # --- ADDED: Log HA environment details if log level is DEBUG ---
+    if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+        _LOGGER.debug("--- Home Assistant Environment Information (DEBUG) ---")
+        env_vars_to_log = [
+            "SUPERVISOR_VERSION",
+            "SUPERVISOR_ARCH",
+            "SUPERVISOR_MACHINE", # Often indicates installation type (e.g., generic-x86-64, raspberrypi4-64)
+            "SUPERVISOR_HOSTNAME",
+            "TZ", # Timezone
+            # Note: HA Core version isn't directly available as a simple env var here.
+        ]
+        for var in env_vars_to_log:
+            value = os.environ.get(var, "Not Set/Unavailable")
+            _LOGGER.debug(f"Env Var '{var}': {value}")
+        _LOGGER.debug("--- End Home Assistant Environment Information ---")
+    # --- END ADDED BLOCK ---
 
     # Get intervals from config
     normal_update_interval = CONFIG.get("update_interval_seconds", UPDATE_INTERVAL)

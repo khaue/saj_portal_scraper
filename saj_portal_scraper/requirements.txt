@@ -1,4 +1,4 @@
 # /workspaces/addons/saj_portal_scraper/requirements.txt
 selenium>=4.10,<5
 paho-mqtt>=1.6,<2.0
-debugpy>=1.6 # Adicione esta linha
+debugpy>=1.6
