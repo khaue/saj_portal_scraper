@@ -1,6 +1,6 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.9"
+version: "1.0.10"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
@@ -15,7 +15,7 @@ ports_description: # Opcional, mas bom para documentar
   5678/tcp: Python Debugger (debugpy)
 boot: auto
 hassio_api: true
-#host_network: true
+host_network: true
 # Add other supported architectures
 init: false # Add-on runs as a service
 options: # User-configurable options

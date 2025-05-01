@@ -108,6 +108,52 @@ def log_driver_versions():
     _LOGGER.info("--- Finished Checking WebDriver Component Versions ---")
 # --- End Function to Log Driver Versions ---
 
+# --- Function to Log Environment Info ---
+def log_environment_info():
+    """Logs Home Assistant environment information and Docker context."""
+    _LOGGER.debug("--- Home Assistant Environment Information (DEBUG) ---")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_VERSION': {os.environ.get('SUPERVISOR_VERSION', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_ARCH': {os.environ.get('SUPERVISOR_ARCH', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_MACHINE': {os.environ.get('SUPERVISOR_MACHINE', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_HOSTNAME': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'TZ': {os.environ.get('TZ', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Running in Docker: {'/.dockerenv' in os.listdir('/')}")
+    _LOGGER.debug(f"Current PID: {os.getpid()}")
+    _LOGGER.debug(f"Current working directory: {os.getcwd()}")
+    _LOGGER.debug(f"Contents of root directory: {os.listdir('/')}")
+    for key, value in os.environ.items():
+        _LOGGER.debug(f"Env Var '{key}': {value}")
+
+    _LOGGER.debug("--- End Home Assistant Environment Information ---")
+
+# --- Function to Fetch Supervisor Info ---
+def fetch_supervisor_info():
+    """Fetches information from the Supervisor API."""
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
+    if not supervisor_token:
+        _LOGGER.error("SUPERVISOR_TOKEN is not set.")
+        return
+
+    headers = {"Authorization": f"Bearer {supervisor_token}"}
+    try:
+        response = requests.get("http://supervisor/info", headers=headers)
+        response.raise_for_status()
+        data = response.json().get("data", {})
+        _LOGGER.info(f"Supervisor Info: {data}")
+    except requests.RequestException as e:
+        _LOGGER.error(f"Failed to fetch Supervisor info: {e}")
+
+def is_running_in_docker():
+    """Check if the script is running inside a Docker container."""
+    try:
+        exists = os.path.exists('/.dockerenv')
+        _LOGGER.debug(f"Checking for /.dockerenv: Exists={exists}")
+        return exists
+    except Exception as e:
+        _LOGGER.error(f"Error checking for /.dockerenv: {e}")
+        return False
+
+_LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
 
 def handle_shutdown(signum, frame):
     global shutdown_requested
@@ -336,15 +382,20 @@ def run_cycle():
      except Exception as e: # Unexpected errors
          _LOGGER.exception(f"Unexpected error during processing cycle: {e}")
 
-
-# --- Main Execution ---
 if __name__ == "__main__":
     _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
 
     # Log Firefox and Geckodriver versions at startup
-    log_driver_versions() # <-- ADDED CALL
+    log_driver_versions()
 
+    # Load configuration
     load_config()
+
+    # Fetch Supervisor info as a fallback
+    fetch_supervisor_info()
+
+    # Check Docker environment
+    _LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
 
@@ -356,20 +407,7 @@ if __name__ == "__main__":
 
     # --- ADDED: Log HA environment details if log level is DEBUG ---
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        _LOGGER.debug("--- Home Assistant Environment Information (DEBUG) ---")
-        env_vars_to_log = [
-            "SUPERVISOR_VERSION",
-            "SUPERVISOR_ARCH",
-            "SUPERVISOR_MACHINE", # Often indicates installation type (e.g., generic-x86-64, raspberrypi4-64)
-            "SUPERVISOR_HOSTNAME",
-            "TZ", # Timezone
-            # Note: HA Core version isn't directly available as a simple env var here.
-        ]
-        for var in env_vars_to_log:
-            value = os.environ.get(var, "Not Set/Unavailable")
-            _LOGGER.debug(f"Env Var '{var}': {value}")
-        _LOGGER.debug("--- End Home Assistant Environment Information ---")
-    # --- END ADDED BLOCK ---
+        log_environment_info()
 
     # Get intervals from config
     normal_update_interval = CONFIG.get("update_interval_seconds", UPDATE_INTERVAL)
