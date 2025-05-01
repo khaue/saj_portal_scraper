@@ -117,7 +117,7 @@ def log_environment_info():
     _LOGGER.debug(f"Env Var 'SUPERVISOR_MACHINE': {os.environ.get('SUPERVISOR_MACHINE', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'SUPERVISOR_HOSTNAME': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'TZ': {os.environ.get('TZ', 'Not Set/Unavailable')}")
-    _LOGGER.debug(f"Running in Docker: {'/.dockerenv' in os.listdir('/')}")
+    _LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
     _LOGGER.debug(f"Current PID: {os.getpid()}")
     _LOGGER.debug(f"Current working directory: {os.getcwd()}")
     _LOGGER.debug(f"Contents of root directory: {os.listdir('/')}")
@@ -147,13 +147,11 @@ def is_running_in_docker():
     """Check if the script is running inside a Docker container."""
     try:
         exists = os.path.exists('/.dockerenv')
-        _LOGGER.debug(f"Checking for /.dockerenv: Exists={exists}")
+        _LOGGER.debug(f"Checking for /.dockerenv: Exists={exists}, Current PID: {os.getpid()}, Current Working Directory: {os.getcwd()}")
         return exists
     except Exception as e:
-        _LOGGER.error(f"Error checking for /.dockerenv: {e}")
+        _LOGGER.error(f"Error checking for /.dockerenv: {e}", exc_info=True)
         return False
-
-_LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
 
 def handle_shutdown(signum, frame):
     global shutdown_requested
@@ -393,9 +391,6 @@ if __name__ == "__main__":
 
     # Fetch Supervisor info as a fallback
     fetch_supervisor_info()
-
-    # Check Docker environment
-    _LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
 
