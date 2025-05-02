@@ -23,5 +23,5 @@ date
 
 # --- DEBUG ---
 # Uncomment the line below to enable debugging with debugpy
-echo "[run.sh] Starting with debugpy on port 5678. Waiting for debugger connection..."
-exec python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/run.py
+#echo "[run.sh] Starting with debugpy on port 5678. Waiting for debugger connection..."
+#exec python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/run.py
