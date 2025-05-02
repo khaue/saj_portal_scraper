@@ -19,7 +19,7 @@ echo "[run.sh] Checking current system time:"
 date
 
 # Execute the main Python script located at /app/run.py
-#exec python3 /app/run.py
+exec python3 /app/run.py
 
 # --- DEBUG ---
 # Uncomment the line below to enable debugging with debugpy
