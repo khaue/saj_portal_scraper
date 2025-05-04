@@ -1,5 +1,10 @@
 # /workspaces/addons/saj_portal_scraper/requirements.txt
+#selenium>=4.10,<5
 paho-mqtt>=1.6,<2.0
+#debugpy>=1.6
 selenium==4.11.2
+#paho-mqtt==1.6.1
 debugpy==1.6.7
-requests>=2.28.0,<3.0
+requests==2.28.1
+requests>=2.25,<2.32
+requests==2.31.0

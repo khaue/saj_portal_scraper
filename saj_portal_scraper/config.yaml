@@ -1,12 +1,19 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.13"
+version: "1.0.15"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
   - aarch64
   - amd64
   - armv7
+environment:
+  SUPERVISOR_TOKEN: "{{ SUPERVISOR_TOKEN }}"
+  TZ: "{{ TZ }}"
+  SUPERVISOR_VERSION: "{{ SUPERVISOR_VERSION }}"
+  SUPERVISOR_ARCH: "{{ SUPERVISOR_ARCH }}"
+  SUPERVISOR_MACHINE: "{{ SUPERVISOR_MACHINE }}"
+  SUPERVISOR_HOSTNAME: "{{ SUPERVISOR_HOSTNAME }}"
 icon: icon.png
 logo: logo.png
 ports:
@@ -14,6 +21,7 @@ ports:
 ports_description: # Opcional, mas bom para documentar
   5678/tcp: Python Debugger (debugpy)
 boot: auto
+homeassistant_api: true
 hassio_api: true
 host_network: true
 # Add other supported architectures
@@ -36,6 +44,7 @@ options: # User-configurable options
   mqtt_port: 1883
   mqtt_username: ""
   mqtt_password: ""
+  debug_mode: "false"
 schema: # Defines the UI for the options
   log_level: list(trace|debug|info|notice|warning|error|fatal)
   timezone: str
@@ -52,9 +61,8 @@ schema: # Defines the UI for the options
   mqtt_port: int
   mqtt_username: str
   mqtt_password: password
-# Optional: Request access to the Supervisor-provided MQTT service
+  debug_mode: list(false|true)
 services:
   - mqtt:need # Request access to the MQTT service managed by Supervisor
-# Optional: Define persistent data path
 map:
   - data:rw # Map /data directory for persistent state (peak power)

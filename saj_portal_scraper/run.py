@@ -34,6 +34,7 @@ import web_scraper
 import utils
 import mqtt_utils
 import persistence
+import requests
 
 OPTIONS_FILE = "/data/options.json"
 CONFIG = {}
@@ -56,6 +57,23 @@ last_known_update_times: dict[str, str] = {} # Stores the last Update_time (ISO 
 last_data_change_timestamp: float | None = None # Monotonic time of the last data change detected
 using_extended_interval: bool = False # Flag indicating if the extended interval is active
 # --- End Global State ---
+
+_LOGGER = logging.getLogger(__name__)
+
+def log_supervisor_info():
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
+    if not supervisor_token:
+        _LOGGER.error("SUPERVISOR_TOKEN is not set. Cannot fetch Supervisor info.")
+        return
+
+    headers = {"Authorization": f"Bearer {supervisor_token}"}
+    try:
+        response = requests.get("http://supervisor/info", headers=headers)
+        response.raise_for_status()
+        data = response.json().get("data", {})
+        _LOGGER.info(f"Supervisor Info: {data}")
+    except requests.RequestException as e:
+        _LOGGER.error(f"Error fetching Supervisor info: {e}")
 
 # --- Function to Log Driver Versions ---
 def log_driver_versions():
@@ -116,6 +134,7 @@ def log_environment_info():
     _LOGGER.debug(f"Env Var 'SUPERVISOR_ARCH': {os.environ.get('SUPERVISOR_ARCH', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'SUPERVISOR_MACHINE': {os.environ.get('SUPERVISOR_MACHINE', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'SUPERVISOR_HOSTNAME': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_TOKEN': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'TZ': {os.environ.get('TZ', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
     _LOGGER.debug(f"Current PID: {os.getpid()}")
@@ -125,23 +144,6 @@ def log_environment_info():
         _LOGGER.debug(f"Env Var '{key}': {value}")
 
     _LOGGER.debug("--- End Home Assistant Environment Information ---")
-
-# --- Function to Fetch Supervisor Info ---
-def fetch_supervisor_info():
-    """Fetches information from the Supervisor API."""
-    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
-    if not supervisor_token:
-        _LOGGER.error("SUPERVISOR_TOKEN is not set.")
-        return
-
-    headers = {"Authorization": f"Bearer {supervisor_token}"}
-    try:
-        response = requests.get("http://supervisor/info", headers=headers)
-        response.raise_for_status()
-        data = response.json().get("data", {})
-        _LOGGER.info(f"Supervisor Info: {data}")
-    except requests.RequestException as e:
-        _LOGGER.error(f"Failed to fetch Supervisor info: {e}")
 
 def is_running_in_docker():
     """Check if the script is running inside a Docker container."""
@@ -383,14 +385,11 @@ def run_cycle():
 if __name__ == "__main__":
     _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
 
-    # Log Firefox and Geckodriver versions at startup
     log_driver_versions()
 
+    log_supervisor_info()
     # Load configuration
     load_config()
-
-    # Fetch Supervisor info as a fallback
-    fetch_supervisor_info()
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
 

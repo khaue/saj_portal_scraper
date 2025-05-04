@@ -52,6 +52,9 @@ def validate_connection(config: dict) -> webdriver.Firefox:
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-software-rasterizer")
+    options.set_preference("security.sandbox.content.level", 0)
     options.binary_location = FIREFOX_BINARY_PATH
     service = Service(GECKODRIVER_PATH)
     driver = None
@@ -80,10 +83,10 @@ def validate_connection(config: dict) -> webdriver.Firefox:
         password_field.send_keys(password)
         password_field.send_keys(Keys.RETURN)
         wait.until(EC.url_to_be(DASHBOARD_URL))
-        _LOGGER.info("Login successful. Dashboard loaded.")
+        _LOGGER.info("Login successful. SAJ Portal initial page loaded.")
         return driver
     except TimeoutException:
-        _LOGGER.error("Timeout occurred during login process (finding elements or waiting for dashboard).")
+        _LOGGER.error("Login process timed out. Unable to complete login. Please verify your username and password.")
         # Dump HTML on Login Failure for debugging
         try:
             page_html = driver.page_source
