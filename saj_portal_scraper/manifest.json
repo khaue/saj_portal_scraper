@@ -1,6 +1,6 @@
 {
   "name": "SAJ Portal Scraper",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "slug": "saj_portal_Scraper",
   "description": "Fetches data from SAJ Portal using web scraping and publishes via MQTT.",
   "arch": [
