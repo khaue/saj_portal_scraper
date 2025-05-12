@@ -60,6 +60,27 @@ using_extended_interval: bool = False # Flag indicating if the extended interval
 
 _LOGGER = logging.getLogger(__name__)
 
+def log_docker_image_info():
+    """Logs information about the Docker image and base system."""
+    _LOGGER.info("--- Docker Image Information ---")
+    build_from = os.environ.get("BUILD_FROM", "Not set")
+    _LOGGER.info(f"BUILD_FROM: {build_from}")
+
+    # Log OS release info
+    try:
+        if os.path.exists("/etc/os-release"):
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME=") or line.startswith("NAME=") or line.startswith("VERSION="):
+                        _LOGGER.info(line.strip())
+    except Exception as e:
+        _LOGGER.warning(f"Could not read /etc/os-release: {e}")
+
+    # Log Python version
+    _LOGGER.info(f"Python version: {sys.version}")
+
+    _LOGGER.info("--- End Docker Image Information ---")
+
 def log_supervisor_info():
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
     if not supervisor_token:
@@ -384,12 +405,17 @@ def run_cycle():
 
 if __name__ == "__main__":
     _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
+    _LOGGER.info(f"Add-on version: {ADDON_VERSION}")
 
-    log_driver_versions()
-
-    log_supervisor_info()
     # Load configuration
     load_config()
+
+   # Only log Docker, driver, and supervisor info if log level is DEBUG or lower (more verbose)
+    log_level = logging.getLogger().getEffectiveLevel()
+    if log_level <= logging.DEBUG:
+        log_docker_image_info()
+        log_driver_versions()
+        log_supervisor_info()
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
 
