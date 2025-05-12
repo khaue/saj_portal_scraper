@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import yaml
 import time
 import json
 import logging
@@ -38,8 +38,7 @@ import requests
 
 OPTIONS_FILE = "/data/options.json"
 CONFIG = {}
-# Attempt to get add-on version from environment variable
-ADDON_VERSION = os.environ.get("VERSION", "unknown")
+ADDON_VERSION = ""
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 _LOGGER = logging.getLogger(__name__)
@@ -181,9 +180,18 @@ def handle_shutdown(signum, frame):
     _LOGGER.info(f"Received signal {signum}. Requesting shutdown...")
     shutdown_requested = True
 
-signal.signal(signal.SIGTERM, handle_shutdown)
-signal.signal(signal.SIGINT, handle_shutdown)
 
+
+def get_addon_version_from_config():
+    """Reads the add-on version from config.yaml."""
+    config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            return config.get("version", "unknown")
+    except Exception as e:
+        _LOGGER.warning(f"Could not read add-on version from config.yaml: {e}")
+        return "unknown"
 
 def load_config():
     global CONFIG
@@ -230,6 +238,9 @@ def load_config():
     except (json.JSONDecodeError, Exception) as e:
         _LOGGER.error(f"Error loading configuration: {e}")
         sys.exit(1)
+
+    ADDON_VERSION = get_addon_version_from_config()
+    _LOGGER.info(f"Add-on version: {ADDON_VERSION}")
 
 def cleanup():
     global mqtt_client, webdriver
@@ -404,9 +415,10 @@ def run_cycle():
          _LOGGER.exception(f"Unexpected error during processing cycle: {e}")
 
 if __name__ == "__main__":
-    _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
-    _LOGGER.info(f"Add-on version: {ADDON_VERSION}")
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
 
+    _LOGGER.info("Starting SAJ Portal Scraper Add-on...")
     # Load configuration
     load_config()
 

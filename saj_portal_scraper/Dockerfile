@@ -38,6 +38,9 @@ RUN apk add --no-cache \
     libsm \
     libice \
     mesa-gl \
+    xvfb \
+    libxshmfence \
+    libdrm \
     ttf-freefont
 
 # Define o diretório de trabalho
