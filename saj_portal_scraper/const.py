@@ -21,10 +21,26 @@ GECKODRIVER_PATH = "/usr/bin/geckodriver"
 FIREFOX_BINARY_PATH = "/usr/bin/firefox-esr"
 
 # --- SAJ Portal Specifics ---
-LOGIN_URL = "https://iop.saj-electric.com/login"
-DASHBOARD_URL = "https://iop.saj-electric.com/index"
-DATA_URL_TEMPLATE = "https://iop.saj-electric.com/monitor/data-show-tab?deviceSn={device_sn}"
-# OLD URL: "https://iop.saj-electric.com/monitor/bindata-time?deviceSn={device_sn}&runningState=3&type=0&tableType=0&unit=AH"
+# URLs for all possible SAJ portals
+BASE_SAJ_URLS = [
+    "https://eop.saj-electric.com",
+    "https://iop.saj-electric.com",
+    "https://op.saj-electric.cn"
+]
+DEFAULT_BASE_SAJ_URL = "https://iop.saj-electric.com"
+
+def build_saj_urls(config):
+    """
+    Build the SAJ portal URLs dynamically based on the config['base_saj_url'] value.
+    Returns a dict with LOGIN_URL, DASHBOARD_URL, DATA_URL_TEMPLATE.
+    """
+    base_url = config.get("base_saj_url", DEFAULT_BASE_SAJ_URL).rstrip("/")
+    return {
+        "LOGIN_URL": f"{base_url}/login",
+        "DASHBOARD_URL": f"{base_url}/index",
+        "DATA_URL_TEMPLATE": f"{base_url}/monitor/data-show-tab?deviceSn={{device_sn}}"
+    }
+
 USERNAME_SELECTOR = 'input[placeholder="Username/Email"]'
 PASSWORD_SELECTOR = 'input[type="password"]'
 

@@ -1,6 +1,6 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.19"
+version: "1.0.20"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
@@ -31,6 +31,7 @@ init: false # Add-on runs as a service
 options: # User-configurable options
   log_level: "info"
   timezone: "Etc/UTC"
+  base_saj_url: "https://iop.saj-electric.com" # Novo campo para seleção do portal SAJ
   saj_username: ""
   saj_password: ""
   # Keep microinverters as a string for simplicity in config UI
@@ -50,15 +51,16 @@ options: # User-configurable options
 schema: # Defines the UI for the options
   log_level: list(trace|debug|info|notice|warning|error|fatal)
   timezone: str
+  base_saj_url: list(https://iop.saj-electric.com|https://eop.saj-electric.com|https://op.saj-electric.cn)
   saj_username: str
-  saj_password: password # Use 'password' type for masking
+  saj_password: password
   microinverters: str
   inactivity_enabled: bool
-  inactivity_start_time: str # Keep as string, validate in run.py
-  inactivity_end_time: str # Keep as string, validate in run.py
+  inactivity_start_time: str
+  inactivity_end_time: str
   update_interval_seconds: int
-  data_inactivity_threshold_seconds: int # Opcional, inteiro >= 1
-  extended_update_interval_seconds: int # Opcional, inteiro >= 60
+  data_inactivity_threshold_seconds: int
+  extended_update_interval_seconds: int
   mqtt_host: str
   mqtt_port: int
   mqtt_username: str

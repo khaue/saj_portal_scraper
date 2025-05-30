@@ -29,6 +29,7 @@ from const import (
     DEFAULT_EXTENDED_UPDATE_INTERVAL,
     FIREFOX_BINARY_PATH, # <-- ADDED for version checking
     GECKODRIVER_PATH,    # <-- ADDED for version checking
+    build_saj_urls,  # Importa função para URLs dinâmicas
 )
 import web_scraper
 import utils
