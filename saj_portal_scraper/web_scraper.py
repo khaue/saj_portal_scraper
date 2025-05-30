@@ -44,6 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def is_session_expired(driver):
     """Detects if the session has expired by checking if it is on the login screen."""
+    _LOGGER.debug(f"Checking expired session...")
     try:
         # Check if on the login URL
         if LOGIN_URL in driver.current_url:
@@ -58,8 +59,10 @@ def is_session_expired(driver):
 
 def _is_data_url_in(driver):
     """Check if the current page is a data url page (ignoring the variable part at the end)."""
+    _LOGGER.debug(f"Checking current URL...")
     try:
         base_data_url = DATA_URL_TEMPLATE.split("{")[0]
+        _LOGGER.debug(f"Current URL: {driver.current_url}")
         if driver.current_url.startswith(base_data_url) and not is_session_expired(driver):
             return True
         _LOGGER.debug(f"Data URL Checked. URL: {driver.current_url}")
@@ -156,7 +159,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
     try:
         local_tz_str = os.environ.get("TZ", "UTC")
         local_tz = ZoneInfo(local_tz_str)
-        _LOGGER.info(f"Using local timezone: {local_tz_str} ({local_tz})")
+        _LOGGER.debug(f"Using local timezone: {local_tz_str} ({local_tz})")
     except ZoneInfoNotFoundError:
         _LOGGER.warning(f"Timezone '{local_tz_str}' not found. Falling back to UTC.")
         local_tz = ZoneInfo("UTC")
@@ -165,15 +168,22 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
         local_tz = ZoneInfo("UTC")
     utc_tz = timezone.utc
 
+    recovery_attempted = False
+
     for device_sn, device_alias in microinverter_map.items():
         data_url = DATA_URL_TEMPLATE.format(device_sn=device_sn)
         _LOGGER.info("Fetching data for device %s (%s)...", device_alias, device_sn)
+
+        # Log all microinverter aliases and serials at debug level
+        for sn, alias in microinverter_map.items():
+            _LOGGER.debug(f"Configured microinverter: SN={sn}, Alias={alias}")
 
         try:
             driver.get(data_url)
             WebDriverWait(driver, wait_timeout).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr"))
             )
+
             if not _is_data_url_in(driver):
                 _LOGGER.warning("Not logged in when trying to fetch data for device %s (%s).", device_alias, device_sn)
                 try:
@@ -283,8 +293,8 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
             else:
                 _LOGGER.warning("No valid rows with converted update_time processed for device %s.", device_alias)
 
-        except TimeoutException:
-            _LOGGER.error("Timeout (%ds) waiting for data table for device %s (%s). URL: %s", wait_timeout, device_alias, device_sn, data_url)
+        except TimeoutException as timeout_exc:
+            _LOGGER.error("Timeout (%ds) waiting for data table for device %s (%s). URL: %s", wait_timeout, device_alias, device_sn, data_url, exc_info=timeout_exc)
             try:
                 page_html = driver.page_source
                 filename = f"/data/saj_debug_data_timeout_{device_alias}_{int(time.time())}.html"
@@ -294,7 +304,16 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
                 _LOGGER.error(f"Page source saved to {filename} for debugging data timeout. URL: {driver.current_url}")
             except Exception as dump_err:
                 _LOGGER.error("Failed to save page source during data timeout: %s", dump_err)
-            continue
+            if not recovery_attempted:
+                _LOGGER.info("Quitting driver, waiting 10 seconds, and attempting to re-login due to timeout...")
+                driver.quit()
+                time.sleep(10)
+                driver = validate_connection(config)
+                recovery_attempted = True
+                continue
+            else:
+                _LOGGER.error("Timeout occurred again after recovery attempt. Aborting this microinverter read.")
+                break
         except (NoSuchElementException, WebDriverException) as fetch_err:
             _LOGGER.error("Selenium error fetching data for device %s (%s): %s",
                           device_alias, device_sn, fetch_err, exc_info=True)
@@ -303,6 +322,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
             _LOGGER.exception("Unexpected error fetching data for device %s (%s): %s",
                               device_alias, device_sn, e)
             continue
+
 
     _LOGGER.info("Finished fetching data for all configured devices.")
     return all_device_data

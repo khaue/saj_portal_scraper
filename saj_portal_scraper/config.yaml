@@ -1,6 +1,6 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.18"
+version: "1.0.19"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
@@ -18,8 +18,10 @@ icon: icon.png
 logo: logo.png
 ports:
   5678/tcp: 5678 # Mapeia a porta 5678 TCP do container para a porta 5678 do host
+  #1883/tcp: 1883 # Mapeia a porta MQTT padrão
 ports_description: # Opcional, mas bom para documentar
   5678/tcp: Python Debugger (debugpy)
+  #1883/tcp: MQTT broker (core-mosquitto)
 boot: auto
 homeassistant_api: true
 hassio_api: true
