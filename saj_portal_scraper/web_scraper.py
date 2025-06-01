@@ -3,16 +3,16 @@ import logging
 import time
 from datetime import datetime, timezone, timedelta
 import os
+
+_LOGGER = logging.getLogger(__name__)
+
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 except ImportError:
-    _LOGGER.error("zoneinfo library not found. Please ensure Python 3.9+ or install backports.zoneinfo.")
-    # Define a simple fallback if zoneinfo is not available
     class ZoneInfoNotFoundError(Exception): pass
     class ZoneInfo:
         def __init__(self, key):
             if key.upper() != "UTC":
-                # Cannot determine local TZ without the library, so use UTC as fallback
                 _LOGGER.warning(f"zoneinfo not available, cannot determine local timezone '{key}'. Using UTC.")
             self._key = "UTC"
         def __repr__(self): return f"ZoneInfo(key='{self._key}')"
@@ -26,6 +26,12 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.keys import Keys
 
+# Import urllib3 exceptions for robust connection error handling
+try:
+    from urllib3.exceptions import MaxRetryError, NewConnectionError
+except ImportError:
+    MaxRetryError = NewConnectionError = None  # Fallback if urllib3 not present
+
 from const import (
     GECKODRIVER_PATH,
     FIREFOX_BINARY_PATH,
@@ -37,8 +43,6 @@ from const import (
     DEFAULT_PASSWORD,
     DEFAULT_MICROINVERTERS
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 def is_session_expired(driver, config):
     """Detects if the session has expired by checking if it is on the login screen."""
@@ -138,8 +142,12 @@ def validate_connection(config: dict) -> webdriver.Firefox:
         raise ValueError(f"Login failed: {login_err}") from login_err
 
 
-def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
+def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: bool = False) -> dict:
     """Synchronous function to fetch data using Selenium."""
+    if force_relogin:
+        _LOGGER.info("Forcing re-login before data collection (end of inactivity period detected).")
+        _perform_login(driver, config)
+
     microinverters_str = config.get("microinverters", "")
     if not microinverters_str:
         _LOGGER.warning("No microinverters configured. Returning empty data.")
@@ -185,14 +193,18 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
         _LOGGER.info("Fetching data for device %s (%s)...", device_alias, device_sn)
 
         try:
-            # Simulação de erro de conexão para teste de recovery automático
+            # error simulation
             #if device_alias == "Mi_Lateral_A":
             #    raise WebDriverException("Failed to establish a new connection: simulated test error")
+
+            _LOGGER.debug(f"init driver.get: {data_url}")
             driver.get(data_url)
-            WebDriverWait(driver, wait_timeout).until(
+            time.sleep(4)
+            _LOGGER.debug("Calling WebDriverWait...")
+            WebDriverWait(driver, wait_timeout,poll_frequency=2).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr"))
             )
-
+            _LOGGER.debug("WebDriverWait called successfully.")
             if not _is_data_url_in(driver, config):
                 _LOGGER.warning("Not logged in when trying to fetch data for device %s (%s).", device_alias, device_sn)
                 try:
@@ -302,30 +314,39 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
             else:
                 _LOGGER.warning("No valid rows with converted update_time processed for device %s.", device_alias)
 
-        except (TimeoutException, NoSuchElementException, WebDriverException) as fetch_err:
+        except (TimeoutException, NoSuchElementException, WebDriverException, MaxRetryError, NewConnectionError) as fetch_err:
             is_timeout = isinstance(fetch_err, TimeoutException)
             is_conn_refused = (
                 "Failed to establish a new connection" in str(fetch_err) or
                 "Connection refused" in str(fetch_err) or
-                "browsingContext.currentWindowGlobal is null" in str(fetch_err)
+                "browsingContext.currentWindowGlobal is null" in str(fetch_err) or
+                (MaxRetryError is not None and isinstance(fetch_err, MaxRetryError)) or
+                (NewConnectionError is not None and isinstance(fetch_err, NewConnectionError))
             )
             if is_timeout or is_conn_refused:
                 err_type = "Timeout" if is_timeout else "WebDriver connection refused"
                 _LOGGER.error(f"{err_type} while fetching data for device %s (%s). URL: %s", device_alias, device_sn, data_url, exc_info=fetch_err)
                 try:
-                    page_html = driver.page_source
+                    if driver:
+                        try:
+                            page_html = driver.page_source
+                        except Exception as page_err:
+                            page_html = f"<no page source available: {page_err}>"
+                    else:
+                        page_html = "<no driver>"
                     filename = f"/data/saj_debug_data_{'timeout' if is_timeout else 'connrefused'}_{device_alias}_{int(time.time())}.html"
                     with open(filename, "w", encoding="utf-8") as f:
-                        f.write(f"<!-- URL: {driver.current_url} -->\n")
+                        f.write(f"<!-- URL: {getattr(driver, 'current_url', 'unknown')} -->\n")
                         f.write(page_html)
-                    _LOGGER.error(f"Page source saved to {filename} for debugging {err_type.lower()}. URL: {driver.current_url}")
+                    _LOGGER.error(f"Page source saved to {filename} for debugging {err_type.lower()}. URL: {getattr(driver, 'current_url', 'unknown')}")
                 except Exception as dump_err:
                     _LOGGER.error("Failed to save page source during %s: %s", err_type.lower(), dump_err)
                 if not recovery_attempted:
                     _LOGGER.info("Quitting driver, waiting 5 seconds, and attempting to re-login due to %s...", err_type.lower())
                     try:
-                        driver.quit()
-                        _LOGGER.debug("Webdriver quit successfully.")
+                        if driver:
+                            driver.quit()
+                            _LOGGER.debug("Webdriver quit successfully.")
                     except Exception as e:
                         _LOGGER.warning(f"Exception on driver.quit(): {e}")
                     finally:
@@ -337,7 +358,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox) -> dict:
                 else:
                     _LOGGER.error("%s occurred again after recovery attempt. Aborting this microinverter read.", err_type)
                     break
-            _LOGGER.error("Selenium error fetching data for device %s (%s): %s",
+            _LOGGER.error("Selenium/Connection error fetching data for device %s (%s): %s",
                           device_alias, device_sn, fetch_err, exc_info=True)
             continue
         except Exception as e:

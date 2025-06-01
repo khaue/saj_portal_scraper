@@ -56,6 +56,7 @@ initial_setup_done = False
 last_known_update_times: dict[str, str] = {} # Stores the last Update_time (ISO UTC string) per SN
 last_data_change_timestamp: float | None = None # Monotonic time of the last data change detected
 using_extended_interval: bool = False # Flag indicating if the extended interval is active
+last_plant_data = None
 # --- End Global State ---
 
 _LOGGER = logging.getLogger(__name__)
@@ -271,7 +272,7 @@ def cleanup():
 
 def run_cycle():
      global webdriver, current_peak_power, last_reset_date, mqtt_client, initial_setup_done
-     global last_known_update_times, last_data_change_timestamp, using_extended_interval
+     global last_known_update_times, last_data_change_timestamp, using_extended_interval, last_plant_data
 
      # High priority check: Configured inactivity period
      if initial_setup_done and utils.is_inactive(CONFIG):
@@ -299,17 +300,29 @@ def run_cycle():
      # Fetch Data
      try:
          _LOGGER.info("Fetching microinverter data...")
-         device_data = web_scraper._fetch_data_sync(CONFIG, webdriver)
+         # Força re-login ao sair da inatividade
+         force_relogin = False
+         if not using_extended_interval and getattr(run_cycle, "_last_cycle_was_extended", False):
+             _LOGGER.info("Detected return from inactivity/extended interval. Forcing re-login.")
+             force_relogin = True
+         device_data = web_scraper._fetch_data_sync(CONFIG, webdriver, force_relogin=force_relogin)
+         run_cycle._last_cycle_was_extended = using_extended_interval
 
          if not device_data:
              _LOGGER.warning("No device data fetched in this cycle.")
              # Cannot check for data changes if no data was fetched
              return
 
+         # Garante que last_plant_data sempre tenha um valor válido no primeiro ciclo
+         if last_plant_data is None:
+             last_plant_data = utils.aggregate_plant_data(device_data)
+
+         plant_data = None
+
          # Check for data changes (only after initial setup)
          data_changed_this_cycle = False
          if initial_setup_done:
-             for sn, data in device_data.items():
+            for sn, data in device_data.items():
                  current_update_time = data.get("Update_time") # Should be ISO UTC string
                  previous_update_time = last_known_update_times.get(sn)
 
@@ -323,40 +336,49 @@ def run_cycle():
                  else:
                       _LOGGER.warning(f"Could not check data change for device {sn}: Invalid or missing Update_time ('{current_update_time}')")
 
-             if data_changed_this_cycle:
+            if data_changed_this_cycle:
                  _LOGGER.debug("Data changed in this cycle. Updating last change timestamp.")
                  last_data_change_timestamp = time.monotonic()
+
                  if using_extended_interval:
                      _LOGGER.info("New data detected. Switching back to normal update interval.")
                      using_extended_interval = False
-             else:
+
+                 # Aggregate Data e calcula apenas se houve novidade
+                 _LOGGER.info("Aggregating plant data...")
+                 plant_data = utils.aggregate_plant_data(device_data)
+                 last_plant_data = plant_data
+
+                 # Calculate Peak Power
+                 _LOGGER.info("Calculating peak power...")
+                 current_plant_power_str = plant_data.get("Power")
+                 current_plant_power = None
+                 if current_plant_power_str is not None:
+                     try:
+                         current_plant_power = float(str(current_plant_power_str).replace(',', '.'))
+                     except (ValueError, TypeError):
+                         _LOGGER.warning(f"Could not convert current plant power '{current_plant_power_str}' to float.")
+
+                 new_peak, new_reset_date, peak_state_changed = utils.calculate_peak_power(
+                     current_plant_power, current_peak_power, last_reset_date
+                 )
+
+                 # Persist Peak Power State (if changed)
+                 if peak_state_changed:
+                     _LOGGER.info(f"Peak power state changed. New Peak: {new_peak:.2f}, Reset Date: {new_reset_date}")
+                     current_peak_power = new_peak
+                     last_reset_date = new_reset_date
+                     persistence.save_peak_power_state(current_peak_power, last_reset_date)
+
+            else:
                  _LOGGER.debug("No data changed across all devices in this cycle.")
                  # Decision to switch to extended interval happens in the main loop
+                 # Não recalcula/agrega, só usa o último plant_data
+                 plant_data = last_plant_data
 
-         # Aggregate Data
-         _LOGGER.info("Aggregating plant data...")
-         plant_data = utils.aggregate_plant_data(device_data)
-
-         # Calculate Peak Power
-         _LOGGER.info("Calculating peak power...")
-         current_plant_power_str = plant_data.get("Power")
-         current_plant_power = None
-         if current_plant_power_str is not None:
-             try:
-                 current_plant_power = float(str(current_plant_power_str).replace(',', '.'))
-             except (ValueError, TypeError):
-                  _LOGGER.warning(f"Could not convert current plant power '{current_plant_power_str}' to float.")
-
-         new_peak, new_reset_date, peak_state_changed = utils.calculate_peak_power(
-             current_plant_power, current_peak_power, last_reset_date
-         )
-
-         # Persist Peak Power State (if changed)
-         if peak_state_changed:
-             _LOGGER.info(f"Peak power state changed. New Peak: {new_peak:.2f}, Reset Date: {new_reset_date}")
-             current_peak_power = new_peak
-             last_reset_date = new_reset_date
-             persistence.save_peak_power_state(current_peak_power, last_reset_date)
+         # Garante que plant_data nunca seja None antes do publish
+         if plant_data is None:
+             plant_data = last_plant_data
 
          # Publish to MQTT
          if mqtt_client and mqtt_client.is_connected():
@@ -364,26 +386,29 @@ def run_cycle():
 
               # Conditional Discovery (only on first successful fetch)
               if not initial_setup_done:
-                  _LOGGER.info("Performing initial MQTT discovery...")
-                  try:
-                      mqtt_utils.publish_discovery(mqtt_client, device_data, plant_data, {"value": current_peak_power, "last_reset_date": last_reset_date}, ADDON_VERSION)
-                      _LOGGER.info("Initial MQTT discovery published successfully.")
+                _LOGGER.info("Performing initial MQTT discovery...")
+                try:
+                    if plant_data is None:
+                        plant_data = utils.aggregate_plant_data(device_data)
+                        last_plant_data = plant_data
+                    mqtt_utils.publish_discovery(mqtt_client, device_data, plant_data, {"value": current_peak_power, "last_reset_date": last_reset_date}, ADDON_VERSION)
+                    _LOGGER.info("Initial MQTT discovery published successfully.")
 
-                      _LOGGER.info("Waiting 5 seconds for Home Assistant to process discovery...")
-                      time.sleep(5) # Adjust delay if needed
+                    _LOGGER.info("Waiting 5 seconds for Home Assistant to process discovery...")
+                    time.sleep(5) # Adjust delay if needed
 
-                      initial_setup_done = True
-                      # Initialize timestamps after first successful discovery
-                      _LOGGER.debug("Initializing last known update times and change timestamp.")
-                      last_data_change_timestamp = time.monotonic()
-                      for sn, data in device_data.items():
-                          update_time = data.get("Update_time")
-                          if update_time and isinstance(update_time, str) and 'Z' in update_time:
-                              last_known_update_times[sn] = update_time
-                  except Exception as discovery_err:
-                      _LOGGER.error(f"Failed to publish initial MQTT discovery: {discovery_err}", exc_info=True)
-                      # Abort cycle if initial discovery fails, prevents publishing state
-                      return
+                    initial_setup_done = True
+                    # Initialize timestamps after first successful discovery
+                    _LOGGER.debug("Initializing last known update times and change timestamp.")
+                    last_data_change_timestamp = time.monotonic()
+                    for sn, data in device_data.items():
+                        update_time = data.get("Update_time")
+                        if update_time and isinstance(update_time, str) and 'Z' in update_time:
+                            last_known_update_times[sn] = update_time
+                except Exception as discovery_err:
+                    _LOGGER.error(f"Failed to publish initial MQTT discovery: {discovery_err}", exc_info=True)
+                    # Abort cycle if initial discovery fails, prevents publishing state
+                    return
 
               # Publish current state (only if initial setup is complete)
               if initial_setup_done:
