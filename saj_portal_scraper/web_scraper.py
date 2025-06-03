@@ -18,7 +18,7 @@ except ImportError:
         def __repr__(self): return f"ZoneInfo(key='{self._key}')"
 
 from selenium import webdriver
-from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException
+from selenium.common.exceptions import WebDriverException, TimeoutException, NoSuchElementException, InvalidSessionIdException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -198,7 +198,25 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
             #    raise WebDriverException("Failed to establish a new connection: simulated test error")
 
             _LOGGER.debug(f"init driver.get: {data_url}")
-            driver.get(data_url)
+            if not _is_driver_connected(driver):
+                _LOGGER.warning(f"WebDriver is not connected before driver.get for device {device_alias} ({device_sn}). Attempting recovery.")
+                try:
+                    driver.quit()
+                except Exception as e:
+                    _LOGGER.warning(f"Exception on driver.quit() during pre-get recovery: {e}")
+                driver = validate_connection(config)
+            time.sleep(2)
+            try:
+                _LOGGER.debug(f"Page load timeout is set to: {driver.timeouts.page_load if hasattr(driver, 'timeouts') and hasattr(driver.timeouts, 'page_load') else 'unknown or not available'} seconds.")
+                driver.get(data_url)
+            except InvalidSessionIdException as inv_err:
+                _LOGGER.error(f"WebDriver session invalid for device {device_alias} ({device_sn}) before get(). Attempting recovery. Error: {inv_err}")
+                try:
+                    driver.quit()
+                except Exception as e:
+                    _LOGGER.warning(f"Exception on driver.quit() after InvalidSessionIdException: {e}")
+                driver = validate_connection(config)
+                continue  # Skip to next device after recovery
             time.sleep(4)
             _LOGGER.debug("Calling WebDriverWait...")
             WebDriverWait(driver, wait_timeout,poll_frequency=2).until(
@@ -327,18 +345,24 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                 err_type = "Timeout" if is_timeout else "WebDriver connection refused"
                 _LOGGER.error(f"{err_type} while fetching data for device %s (%s). URL: %s", device_alias, device_sn, data_url, exc_info=fetch_err)
                 try:
-                    if driver:
+                    if driver and _is_driver_connected(driver):
                         try:
                             page_html = driver.page_source
                         except Exception as page_err:
                             page_html = f"<no page source available: {page_err}>"
+                        try:
+                            current_url = driver.current_url
+                        except Exception as url_err:
+                            current_url = f"<unavailable: {url_err}>"
                     else:
-                        page_html = "<no driver>"
+                        # Do NOT attempt to access any driver property if not connected
+                        page_html = "<no driver or driver disconnected>"
+                        current_url = "<no driver or driver disconnected>"
                     filename = f"/data/saj_debug_data_{'timeout' if is_timeout else 'connrefused'}_{device_alias}_{int(time.time())}.html"
                     with open(filename, "w", encoding="utf-8") as f:
-                        f.write(f"<!-- URL: {getattr(driver, 'current_url', 'unknown')} -->\n")
+                        f.write(f"<!-- URL: {current_url} -->\n")
                         f.write(page_html)
-                    _LOGGER.error(f"Page source saved to {filename} for debugging {err_type.lower()}. URL: {getattr(driver, 'current_url', 'unknown')}")
+                    _LOGGER.error(f"Page source saved to {filename} for debugging {err_type.lower()}. URL: {current_url}")
                 except Exception as dump_err:
                     _LOGGER.error("Failed to save page source during %s: %s", err_type.lower(), dump_err)
                 if not recovery_attempted:
@@ -369,3 +393,12 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
 
     _LOGGER.info("Finished fetching data for all configured devices.")
     return all_device_data
+
+def _is_driver_connected(driver):
+    """Check if the Selenium WebDriver is still connected and responsive."""
+    try:
+        # A simple call to current_url will raise if the driver is dead
+        _ = driver.current_url
+        return True
+    except Exception:
+        return False
