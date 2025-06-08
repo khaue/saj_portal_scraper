@@ -283,6 +283,14 @@ def run_cycle():
              using_extended_interval = False
          return
 
+    # force_relogin = False
+    # webdriver = web_scraper.validate_connection(CONFIG)
+    # for i in range(12):
+    #   device_data = web_scraper._fetch_data_sync(CONFIG, webdriver, force_relogin=force_relogin)
+    #   time.sleep(360)
+       #webdriver.quit()
+       #webdriver = None
+
      # Ensure WebDriver is running
      if not webdriver:
          try:
@@ -312,10 +320,6 @@ def run_cycle():
              _LOGGER.warning("No device data fetched in this cycle.")
              # Cannot check for data changes if no data was fetched
              return
-
-         # Garante que last_plant_data sempre tenha um valor válido no primeiro ciclo
-         if last_plant_data is None:
-             last_plant_data = utils.aggregate_plant_data(device_data)
 
          plant_data = None
 
@@ -374,11 +378,13 @@ def run_cycle():
                  _LOGGER.debug("No data changed across all devices in this cycle.")
                  # Decision to switch to extended interval happens in the main loop
                  # Não recalcula/agrega, só usa o último plant_data
+                 if last_plant_data is None:
+                    last_plant_data = utils.aggregate_plant_data(device_data)
                  plant_data = last_plant_data
 
          # Garante que plant_data nunca seja None antes do publish
-         if plant_data is None:
-             plant_data = last_plant_data
+         #if plant_data is None:
+         #    plant_data = last_plant_data
 
          # Publish to MQTT
          if mqtt_client and mqtt_client.is_connected():

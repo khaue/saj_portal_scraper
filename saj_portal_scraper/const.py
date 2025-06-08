@@ -148,3 +148,4 @@ PEAK_POWER_TODAY_NAME = "Peak Power Today"
 
 # --- Persistence ---
 PERSISTENCE_FILE = "/data/peak_power_state.json" # Path inside container mapped to host
+FIREFOX_PROFILE_PATH = "/data/firefox_profile"

@@ -41,7 +41,8 @@ from const import (
     PASSWORD_SELECTOR,
     DEFAULT_USERNAME,
     DEFAULT_PASSWORD,
-    DEFAULT_MICROINVERTERS
+    DEFAULT_MICROINVERTERS,
+    FIREFOX_PROFILE_PATH
 )
 
 def is_session_expired(driver, config):
@@ -112,6 +113,8 @@ def _perform_login(driver, config):
 
 def validate_connection(config: dict) -> webdriver.Firefox:
     """Validate connection and return logged-in WebDriver instance."""
+    _LOGGER.info("Validating connection...")
+    os.makedirs(FIREFOX_PROFILE_PATH, exist_ok=True)
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--disable-gpu")
@@ -119,10 +122,13 @@ def validate_connection(config: dict) -> webdriver.Firefox:
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-software-rasterizer")
+    #options.add_argument(f"--profile")
+    #options.add_argument(FIREFOX_PROFILE_PATH)
     options.set_preference("security.sandbox.content.level", 0)
+
     options.binary_location = FIREFOX_BINARY_PATH
     service = Service(GECKODRIVER_PATH)
-    driver = None
+
     try:
         _LOGGER.debug("Initializing Firefox WebDriver...")
         driver = webdriver.Firefox(service=service, options=options)
@@ -144,6 +150,9 @@ def validate_connection(config: dict) -> webdriver.Firefox:
 
 def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: bool = False) -> dict:
     """Synchronous function to fetch data using Selenium."""
+
+    _LOGGER.info("Starting data collection...")
+
     if force_relogin:
         _LOGGER.info("Forcing re-login before data collection (end of inactivity period detected).")
         _perform_login(driver, config)
@@ -195,49 +204,22 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
         try:
             # error simulation
             #if device_alias == "Mi_Lateral_A":
-            #    raise WebDriverException("Failed to establish a new connection: simulated test error")
+              # raise WebDriverException("Failed to establish a new connection: simulated test error")
 
-            _LOGGER.debug(f"init driver.get: {data_url}")
-            if not _is_driver_connected(driver):
-                _LOGGER.warning(f"WebDriver is not connected before driver.get for device {device_alias} ({device_sn}). Attempting recovery.")
-                try:
-                    driver.quit()
-                except Exception as e:
-                    _LOGGER.warning(f"Exception on driver.quit() during pre-get recovery: {e}")
-                driver = validate_connection(config)
+            _LOGGER.debug(f"Calling driver.GET: {data_url}")
             time.sleep(2)
-            try:
-                _LOGGER.debug(f"Page load timeout is set to: {driver.timeouts.page_load if hasattr(driver, 'timeouts') and hasattr(driver.timeouts, 'page_load') else 'unknown or not available'} seconds.")
-                driver.get(data_url)
-            except InvalidSessionIdException as inv_err:
-                _LOGGER.error(f"WebDriver session invalid for device {device_alias} ({device_sn}) before get(). Attempting recovery. Error: {inv_err}")
-                try:
-                    driver.quit()
-                except Exception as e:
-                    _LOGGER.warning(f"Exception on driver.quit() after InvalidSessionIdException: {e}")
-                driver = validate_connection(config)
-                continue  # Skip to next device after recovery
+            driver.get(data_url)
             time.sleep(4)
             _LOGGER.debug("Calling WebDriverWait...")
             WebDriverWait(driver, wait_timeout,poll_frequency=2).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr"))
             )
             _LOGGER.debug("WebDriverWait called successfully.")
-            if not _is_data_url_in(driver, config):
-                _LOGGER.warning("Not logged in when trying to fetch data for device %s (%s).", device_alias, device_sn)
-                try:
-                    page_html = driver.page_source
-                    filename = f"/data/saj_debug_data_not_logged_{device_alias}_{int(time.time())}.html"
-                    with open(filename, "w", encoding="utf-8") as f:
-                        f.write(f"<!-- URL: {driver.current_url} -->\n")
-                        f.write(page_html)
-                    _LOGGER.error(f"Page source saved to {filename} for debugging not-logged-in state. URL: {driver.current_url}")
-                except Exception as dump_err:
-                    _LOGGER.error("Failed to save page source during not-logged-in state: %s", dump_err)
-                _perform_login(driver, config)
-                continue  # Skip to the next microinverter
 
-            _LOGGER.debug("Data table appeared for device %s.", device_alias)
+            if not _is_data_url_in(driver, config):
+                raise WebDriverException("Failed to establish a new connection: Failed to navigate to data URL.")
+
+            _LOGGER.debug("Data table founded for device %s.", device_alias)
             device_data_rows = {}
             rows = driver.find_elements(By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr")
             _LOGGER.debug("Found %d rows in the table for device %s.", len(rows), device_alias)
@@ -368,21 +350,22 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                 if not recovery_attempted:
                     _LOGGER.info("Quitting driver, waiting 5 seconds, and attempting to re-login due to %s...", err_type.lower())
                     try:
+                        _LOGGER.debug("Verifying Webdriver...")
                         if driver:
                             driver.quit()
+                            driver = None
                             _LOGGER.debug("Webdriver quit successfully.")
                     except Exception as e:
                         _LOGGER.warning(f"Exception on driver.quit(): {e}")
-                    finally:
-                        driver = None
                     time.sleep(5)
                     driver = validate_connection(config)
                     recovery_attempted = True
                     continue
                 else:
-                    _LOGGER.error("%s occurred again after recovery attempt. Aborting this microinverter read.", err_type)
+                    _LOGGER.error("Error after recovery attempt.")
+                    _LOGGER.error("%s occurred after recovery attempt. Aborting this SAJ portal read.", err_type)
                     break
-            _LOGGER.error("Selenium/Connection error fetching data for device %s (%s): %s",
+            _LOGGER.error("Unknown error when fetching data for device %s (%s): %s",
                           device_alias, device_sn, fetch_err, exc_info=True)
             continue
         except Exception as e:
