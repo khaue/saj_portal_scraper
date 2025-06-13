@@ -292,7 +292,7 @@ def run_cycle():
        #webdriver = None
 
      # Ensure WebDriver is running
-     if not webdriver:
+     if not webdriver or not web_scraper._is_driver_connected(webdriver):
          try:
              _LOGGER.info("WebDriver not active. Attempting to validate connection and log in...")
              webdriver = web_scraper.validate_connection(CONFIG)
