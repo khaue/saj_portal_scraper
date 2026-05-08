@@ -72,9 +72,7 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
     plant_sum_energy_total = 0.0
     plant_sum_panel_power = 0.0
     latest_update_time_str: str | None = None
-    latest_server_time_str: str | None = None
     compare_update_time_obj: datetime | None = None
-    compare_server_time_obj: datetime | None = None
 
     for device_sn, latest_row_data in fetched_data.items():
         if not latest_row_data or not isinstance(latest_row_data, dict):
@@ -117,7 +115,7 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
                         )
 
                 # Find the latest timestamp across all devices
-                if attribute == "Update_time" or attribute == "Server_Time":
+                if attribute == "Update_time" :
                     if value_str:
                         try:
                             # Assumes 'YYYY-MM-DDTHH:MM:SSZ' format from scraper
@@ -128,10 +126,6 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
                                 if compare_update_time_obj is None or current_time_obj > compare_update_time_obj:
                                     compare_update_time_obj = current_time_obj
                                     latest_update_time_str = value_str
-                            elif attribute == "Server_Time":
-                                if compare_server_time_obj is None or current_time_obj > compare_server_time_obj:
-                                    compare_server_time_obj = current_time_obj
-                                    latest_server_time_str = value_str
                         except (ValueError, TypeError):
                             _LOGGER.warning(
                                 "Aggregator: Could not parse datetime '%s' for comparison (attribute '%s', device %s). Using raw string if latest.",
@@ -139,7 +133,6 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
                             )
                             # Fallback: use the first non-empty raw string encountered
                             if attribute == "Update_time" and latest_update_time_str is None: latest_update_time_str = value_str
-                            if attribute == "Server_Time" and latest_server_time_str is None: latest_server_time_str = value_str
 
         except Exception as e:
             _LOGGER.error("Aggregator: Error processing data for device %s: %s", device_alias, e, exc_info=True)
@@ -153,7 +146,6 @@ def aggregate_plant_data(fetched_data: dict | None) -> dict:
         "Energy_Total": round(plant_sum_energy_total, 2),
         "Panel_Power": round(plant_sum_panel_power, 2), # Total power from all panels
         "Update_time": latest_update_time_str,
-        "Server_Time": latest_server_time_str,
     }
     _LOGGER.debug("Aggregator: Aggregated plant data: %s", aggregated_data)
     return aggregated_data

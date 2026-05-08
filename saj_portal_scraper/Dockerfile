@@ -1,13 +1,15 @@
-ARG BUILD_FROM
-FROM $BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+FROM ${BUILD_FROM}
 
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
+
+ARG BUILD_ARCH
+ARG GECKODRIVER_VERSION=v0.34.0
 
 #ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 RUN apk add --no-cache \
     firefox-esr \
-    geckodriver \
     py3-pip \
     python3-dev \
     gcc \
@@ -42,6 +44,17 @@ RUN apk add --no-cache \
     libxshmfence \
     libdrm \
     ttf-freefont
+
+# Instala o geckodriver manualmente pois não existe pacote oficial no Alpine 3.19
+RUN set -ex; \
+    case "${BUILD_ARCH}" in \
+    amd64) ARCH="linux64" ;; \
+    aarch64) ARCH="aarch64" ;; \
+    armv7) ARCH="arm7hf" ;; \
+    *) ARCH="linux64" ;; \
+    esac; \
+    wget -qO- "https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-${ARCH}.tar.gz" | tar xz -C /usr/local/bin; \
+    chmod +x /usr/local/bin/geckodriver
 
 # Define o diretório de trabalho
 WORKDIR /app

@@ -244,9 +244,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
 
                 row_data = {}
                 raw_update_time = raw_row_data.get("Update_time")
-                raw_server_time = raw_row_data.get("Server_Time")
                 processed_update_time = raw_update_time
-                processed_server_time = raw_server_time
 
                 if raw_update_time:
                     try:
@@ -260,22 +258,10 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                     except Exception as tz_err:
                         _LOGGER.error(f"Error processing Update_time timezone for {device_alias}: {tz_err}. Using raw value.", exc_info=True)
 
-                if raw_server_time:
-                    try:
-                        naive_server_dt = datetime.strptime(raw_server_time, "%Y-%m-%d %H:%M:%S")
-                        utc_server_dt = naive_server_dt.replace(tzinfo=utc_tz)
-                        processed_server_time = utc_server_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-                        _LOGGER.debug(f"Processed Server_Time for {device_alias}: Raw='{raw_server_time}' (Assumed UTC) -> UTC='{processed_server_time}'")
-                    except ValueError as parse_err:
-                        _LOGGER.warning(f"Could not parse Server_Time string for {device_alias}: '{raw_server_time}'. Error: {parse_err}. Using raw value.")
-                    except Exception as tz_err:
-                        _LOGGER.error(f"Error processing Server_time timezone for {device_alias}: {tz_err}. Using raw value.", exc_info=True)
-
                 row_data["Update_time"] = processed_update_time
-                row_data["Server_Time"] = processed_server_time
 
                 for column_name, raw_value in raw_row_data.items():
-                    if column_name not in ["Update_time", "Server_Time"]:
+                    if column_name not in ["Update_time"]:
                         if column_name in ["Panel_Voltage", "Panel_Current", "Panel_Power"]:
                             channel_col_index = COLUMN_MAPPING.get("Panel_Channel")
                             raw_channel_value = raw_row_data.get("Panel_Channel")
@@ -346,7 +332,7 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                         _LOGGER.error(f"Page source saved to {filename} for debugging {err_type.lower()}. URL: {current_url}")
                     except Exception as dump_err:
                         _LOGGER.error("Failed to save page source during %s: %s", err_type.lower(), dump_err)
-                    if max_attempts < 2:
+                    if attempt < max_attempts:
                         _LOGGER.info("Quitting driver, waiting 5 seconds, and attempting to re-login due to %s...", err_type.lower())
                         try:
                             _LOGGER.debug("Verifying Webdriver...")

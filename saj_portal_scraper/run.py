@@ -299,9 +299,7 @@ def run_cycle():
              _LOGGER.info("Connection validated and logged in successfully.")
          except (ValueError, RuntimeError, Exception) as e:
              _LOGGER.error(f"Failed to establish WebDriver connection or log in: {e}. Will retry next cycle.")
-             if webdriver:
-                  try: webdriver.quit()
-                  except: pass
+             cleanup_webdriver()
              webdriver = None
              return
 
@@ -433,18 +431,22 @@ def run_cycle():
      # Error Handling
      except ValueError as e: # Typically login/config errors
           _LOGGER.error(f"Authentication or configuration error during cycle: {e}")
-          if webdriver:
-               try: webdriver.quit()
-               except: pass
-          webdriver = None
+          cleanup_webdriver()
      except (web_scraper.WebDriverException, web_scraper.TimeoutException) as e: # Selenium errors
           _LOGGER.error(f"Selenium error during data fetch: {e}. WebDriver might be stale.")
-          if webdriver:
-               try: webdriver.quit()
-               except: pass
-          webdriver = None
+          cleanup_webdriver()
      except Exception as e: # Unexpected errors
          _LOGGER.exception(f"Unexpected error during processing cycle: {e}")
+
+def cleanup_webdriver():
+    global webdriver
+    if webdriver:
+        try:
+            _LOGGER.debug("Force quitting webdriver to free memory...")
+            webdriver.quit()
+        except:
+            pass
+        webdriver = None
 
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_shutdown)

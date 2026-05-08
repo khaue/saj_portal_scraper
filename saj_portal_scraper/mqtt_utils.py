@@ -171,12 +171,12 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
 
             # Skip attributes that don't map to a sensor property (unless it's a timestamp)
             # This check now works correctly even if the panel prefix wasn't "PV"
-            if unit is None and device_class is None and attribute not in ["Update_time", "Server_Time"]:
+            if unit is None and device_class is None and attribute not in ["Update_time"]:
                  _LOGGER.debug(f"Skipping discovery for {unique_id} due to missing unit and device_class (Base Attribute: {base_attribute}).")
                  continue
 
             # Ensure timestamps have the correct device class (overrides mapping if needed)
-            if attribute in ["Update_time", "Server_Time"]:
+            if attribute in ["Update_time"]:
                  device_class = "timestamp"
 
             discovery_topic = f"{MQTT_DISCOVERY_PREFIX}/sensor/{unique_id}/config"
@@ -226,8 +226,8 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
         icon = None
 
         # Skip non-sensor attributes, except timestamps
-        if unit is None and device_class is None and attribute not in ["Update_time", "Server_Time"]: continue
-        if attribute in ["Update_time", "Server_Time"]: device_class = "timestamp"
+        if unit is None and device_class is None and attribute not in ["Update_time"]: continue
+        if attribute in ["Update_time"]: device_class = "timestamp"
 
         discovery_topic = f"{MQTT_DISCOVERY_PREFIX}/sensor/{unique_id}/config"
         payload = {
@@ -296,8 +296,7 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
         state_topic = f"{MQTT_BASE_TOPIC}/{sn}/state"
         try:
             update_time_val = data.get("Update_time", "N/A") # Use .get() with default for logging
-            server_time_val = data.get("Server_Time", "N/A")
-            _LOGGER.debug(f"State Publish Check: Publishing state for device '{sn}' TO topic: '{state_topic}'. Update_time='{update_time_val}', Server_Time='{server_time_val}'")
+            _LOGGER.debug(f"State Publish Check: Publishing state for device '{sn}' TO topic: '{state_topic}'. Update_time='{update_time_val}'")
 
             # --- ADDED LOGGING ---
             try:
@@ -319,8 +318,7 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
     plant_state_topic = f"{MQTT_BASE_TOPIC}/plant/state"
     try:
         plant_update_time = plant_data.get("Update_time", "N/A")
-        plant_server_time = plant_data.get("Server_Time", "N/A")
-        _LOGGER.debug(f"Publishing aggregated plant state to {plant_state_topic}. Update_time='{plant_update_time}', Server_Time='{plant_server_time}'")
+        _LOGGER.debug(f"Publishing aggregated plant state to {plant_state_topic}. Update_time='{plant_update_time}'")
 
         try:
             json_payload_plant = json.dumps(plant_data)

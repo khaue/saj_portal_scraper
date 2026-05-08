@@ -16,7 +16,7 @@ DEFAULT_MICROINVERTERS = {
 }
 
 # --- Paths (Inside Container) ---
-GECKODRIVER_PATH = "/usr/bin/geckodriver"
+GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
 # Path matches the one in the base Docker image
 FIREFOX_BINARY_PATH = "/usr/bin/firefox-esr"
 
@@ -48,7 +48,6 @@ PASSWORD_SELECTOR = 'input[type="password"]'
 COLUMN_MAPPING = {
     "ID": 0,
     "Update_time": 1,
-    "Server_Time": 17,
     "Panel_Channel": 3,
     "Panel_Voltage": 4,
     "Panel_Current": 5,
@@ -62,14 +61,13 @@ COLUMN_MAPPING = {
     "Energy_This_Month": 14,
     "Energy_This_Year": 15,
     "Energy_Total": 16,
-    "Strength_Signal": 18,
+    "Strength_Signal": 17,
 }
 
 # --- Sensor Property Mappings (Used for MQTT Discovery) ---
 UNIT_MAPPING = {
     "ID": None,
     "Update_time": None,
-    "Server_Time": None,
     "Panel_Channel": None,
     "Panel_Voltage": "V",
     "Panel_Current": "A",
@@ -89,7 +87,6 @@ UNIT_MAPPING = {
 DEVICE_CLASS_MAPPING = {
     "ID": None,
     "Update_time": "timestamp", # Use string for device class
-    "Server_Time": "timestamp", # Use string for device class
     "Panel_Channel": None,
     "Panel_Voltage": "voltage",
     "Panel_Current": "current",

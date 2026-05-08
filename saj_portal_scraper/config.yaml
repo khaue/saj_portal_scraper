@@ -1,6 +1,6 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.24"
+version: "1.0.25"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
@@ -25,7 +25,7 @@ ports_description: # Opcional, mas bom para documentar
 boot: auto
 homeassistant_api: true
 hassio_api: true
-host_network: true
+host_network: false
 # Add other supported architectures
 init: false # Add-on runs as a service
 options: # User-configurable options
@@ -71,5 +71,4 @@ services:
 map:
   - data:rw # Map /data directory for persistent state (peak power)
   - share:rw # ou :rw para leitura e escrita
-  - all_addon_config:rw # Map all add-on config directories
   #- addons:rw # Map all add-ons config directories
