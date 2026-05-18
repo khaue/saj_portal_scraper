@@ -1,25 +1,20 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/base:3.19
 FROM ${BUILD_FROM}
 
 ENV LANG=C.UTF-8
 
 ARG BUILD_ARCH
-ARG GECKODRIVER_VERSION=v0.34.0
+ARG GECKODRIVER_VERSION=v0.36.0
 
-#ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
-
+# Dependências principais
 RUN apk add --no-cache \
     firefox-esr \
+    python3 \
     py3-pip \
-    python3-dev \
-    gcc \
-    musl-dev \
-    libffi-dev \
-    openssl-dev \
+    bash \
     wget \
     ca-certificates \
     unzip \
-    bash \
     jq \
     tzdata \
     dbus \
@@ -43,42 +38,53 @@ RUN apk add --no-cache \
     xvfb \
     libxshmfence \
     libdrm \
-    ttf-freefont
+    ttf-freefont \
+    fontconfig \
+    freetype \
+    harfbuzz \
+    && apk add --no-cache --virtual .build-deps \
+    gcc \
+    musl-dev \
+    python3-dev \
+    libffi-dev \
+    openssl-dev
 
-# Instala o geckodriver manualmente pois não existe pacote oficial no Alpine 3.19
+# Instala geckodriver compatível com arquitetura
 RUN set -ex; \
     case "${BUILD_ARCH}" in \
-    amd64) ARCH="linux64" ;; \
-    aarch64) ARCH="aarch64" ;; \
-    armv7) ARCH="arm7hf" ;; \
-    *) ARCH="linux64" ;; \
+        amd64) ARCH="linux64" ;; \
+        aarch64) ARCH="linux-aarch64" ;; \
+        armv7) ARCH="linux-arm7hf" ;; \
+        *) ARCH="linux64" ;; \
     esac; \
-    wget -qO- "https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-${ARCH}.tar.gz" | tar xz -C /usr/local/bin; \
-    chmod +x /usr/local/bin/geckodriver
+    URL="https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-${ARCH}.tar.gz"; \
+    echo "Downloading: $URL"; \
+    wget -O /tmp/geckodriver.tar.gz "$URL"; \
+    tar xzf /tmp/geckodriver.tar.gz -C /usr/local/bin; \
+    chmod +x /usr/local/bin/geckodriver; \
+    rm -f /tmp/geckodriver.tar.gz
 
-# Define o diretório de trabalho
+# Diretório da aplicação
 WORKDIR /app
 
-# Copia apenas o requirements.txt primeiro
+# Copia requirements primeiro para aproveitar cache
 COPY requirements.txt .
 
-# Instala pacotes Python
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+# Instala dependências Python
+RUN python3 -m venv /opt/venv
 
-# Copia todo o código da aplicação (incluindo run.sh)
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apk del .build-deps
+
+
+# Copia restante da aplicação
 COPY . .
 
-#COPY etc /etc
+# Instala script principal
+COPY run.sh /run.sh
+RUN chmod a+x /run.sh
 
-RUN chmod a+x run.sh
-
-#RUN chmod a+x /etc/services.d/saj/run
-
-#RUN chmod +x run.sh && chmod +x /etc/services.d/saj/run
-
-#RUN ls -l /etc/services.d/saj
-
-#ENTRYPOINT [ "/init" ]
-
-# Define run.sh como o comando de entrada
-CMD [ "/app/run.sh" ]
+# Comando inicial
+CMD [ "/run.sh" ]
