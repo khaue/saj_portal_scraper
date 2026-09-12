@@ -58,9 +58,6 @@ last_data_change_timestamp: float | None = None # Monotonic time of the last dat
 using_extended_interval: bool = False # Flag indicating if the extended interval is active
 last_plant_data = None
 # --- End Global State ---
-
-_LOGGER = logging.getLogger(__name__)
-
 def log_docker_image_info():
     """Logs information about the Docker image and base system."""
     _LOGGER.info("--- Docker Image Information ---")
@@ -156,7 +153,8 @@ def log_environment_info():
     _LOGGER.debug(f"Env Var 'SUPERVISOR_ARCH': {os.environ.get('SUPERVISOR_ARCH', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'SUPERVISOR_MACHINE': {os.environ.get('SUPERVISOR_MACHINE', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Env Var 'SUPERVISOR_HOSTNAME': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
-    _LOGGER.debug(f"Env Var 'SUPERVISOR_TOKEN': {os.environ.get('SUPERVISOR_HOSTNAME', 'Not Set/Unavailable')}")
+    _LOGGER.debug(f"Env Var 'SUPERVISOR_TOKEN': {os.environ.get('SUPERVISOR_TOKEN', 'Not Set/Unavailable')}")
+    _LOGGER.debug("Env Var 'SUPERVISOR_TOKEN' is present.")
     _LOGGER.debug(f"Env Var 'TZ': {os.environ.get('TZ', 'Not Set/Unavailable')}")
     _LOGGER.debug(f"Running in Docker: {is_running_in_docker()}")
     _LOGGER.debug(f"Current PID: {os.getpid()}")
@@ -196,7 +194,7 @@ def get_addon_version_from_config():
         return "unknown"
 
 def load_config():
-    global CONFIG
+    global CONFIG, ADDON_VERSION
     _LOGGER.info(f"Loading configuration from {OPTIONS_FILE}")
     try:
         with open(OPTIONS_FILE, 'r') as f:
@@ -281,15 +279,8 @@ def run_cycle():
          if using_extended_interval:
              _LOGGER.info("Resetting extended interval flag due to entering inactivity period.")
              using_extended_interval = False
+         cleanup_webdriver()
          return
-
-    # force_relogin = False
-    # webdriver = web_scraper.validate_connection(CONFIG)
-    # for i in range(12):
-    #   device_data = web_scraper._fetch_data_sync(CONFIG, webdriver, force_relogin=force_relogin)
-    #   time.sleep(360)
-       #webdriver.quit()
-       #webdriver = None
 
      # Ensure WebDriver is running
      if not webdriver or not web_scraper._is_driver_connected(webdriver):
@@ -437,6 +428,10 @@ def run_cycle():
           cleanup_webdriver()
      except Exception as e: # Unexpected errors
          _LOGGER.exception(f"Unexpected error during processing cycle: {e}")
+     finally:
+         if webdriver:
+             _LOGGER.debug("Cleaning up WebDriver after cycle to avoid memory growth.")
+             cleanup_webdriver()
 
 def cleanup_webdriver():
     global webdriver

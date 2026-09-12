@@ -1,6 +1,8 @@
 # /workspaces/addons/saj_portal_scraper/const.py
 """Constants for the SAJ Portal Scraper Add-on."""
 
+from urllib.parse import quote
+
 # Add-on domain/slug
 DOMAIN = "saj_portal_scraper"
 
@@ -14,6 +16,9 @@ DEFAULT_MICROINVERTERS = {
     "YOUR_SN1": "Alias1",
     "YOUR_SN2": "Alias2"
 }
+
+CONF_STRING_CURRENT_ENABLED = "string_current_enabled"
+DEFAULT_STRING_CURRENT_ENABLED = False
 
 # --- Paths (Inside Container) ---
 GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
@@ -31,18 +36,25 @@ DEFAULT_BASE_SAJ_URL = "https://iop.saj-electric.com"
 
 def build_saj_urls(config):
     """
-    Build the SAJ portal URLs dynamically based on the config['base_saj_url'] value.
-    Returns a dict with LOGIN_URL, DASHBOARD_URL, DATA_URL_TEMPLATE.
+    Build the main SAJ portal URLs dynamically based on the config['base_saj_url'] value.
+    Returns the login, dashboard, and data URL templates used by the scraper.
     """
     base_url = config.get("base_saj_url", DEFAULT_BASE_SAJ_URL).rstrip("/")
     return {
         "LOGIN_URL": f"{base_url}/login",
         "DASHBOARD_URL": f"{base_url}/index",
-        "DATA_URL_TEMPLATE": f"{base_url}/monitor/data-show-tab?deviceSn={{device_sn}}"
+        "DATA_URL_TEMPLATE": f"{base_url}/login#/monitor/deviceDetail/inverterDetail?deviceSn={{device_sn}}"
     }
 
-USERNAME_SELECTOR = 'input[placeholder="Username/Email"]'
-PASSWORD_SELECTOR = 'input[type="password"]'
+
+def build_device_data_url(config, device_sn):
+    """Build a device detail URL compatible with the current SAJ portal layout."""
+    base_url = config.get("base_saj_url", DEFAULT_BASE_SAJ_URL).rstrip("/")
+    return f"{base_url}/login#/monitor/deviceDetail/inverterDetail?deviceSn={quote(device_sn, safe='')}"
+
+
+USERNAME_SELECTOR = "#form_item_username, input[placeholder=\"Username/Email\"], input[autocomplete=\"username\"]"
+PASSWORD_SELECTOR = "#form_item_password, input[type=\"password\"], input[autocomplete=\"current-password\"]"
 
 # --- Data Extraction Mapping (Column Index on SAJ Portal Table) ---
 COLUMN_MAPPING = {
@@ -52,6 +64,7 @@ COLUMN_MAPPING = {
     "Panel_Voltage": 4,
     "Panel_Current": 5,
     "Panel_Power": 6,
+    "String_Current": 7,
     "Phase": 8,
     "Voltage": 9,
     "Current": 10,
@@ -72,6 +85,7 @@ UNIT_MAPPING = {
     "Panel_Voltage": "V",
     "Panel_Current": "A",
     "Panel_Power": "W",
+    "String_Current": "A",
     "Phase": None,
     "Voltage": "V",
     "Current": "A",
@@ -91,6 +105,7 @@ DEVICE_CLASS_MAPPING = {
     "Panel_Voltage": "voltage",
     "Panel_Current": "current",
     "Panel_Power": "power",
+    "String_Current": "current",
     "Phase": None,
     "Voltage": "voltage",
     "Current": "current",
@@ -114,6 +129,7 @@ STATE_CLASS_MAPPING = {
     "Panel_Voltage": "measurement",
     "Panel_Current": "measurement",
     "Panel_Power": "measurement",
+    "String_Current": "measurement",
     "Frequency": "measurement",
     "Strength_Signal": "measurement",
 }

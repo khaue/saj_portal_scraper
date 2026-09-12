@@ -153,6 +153,10 @@ def publish_discovery(client: mqtt.Client, device_data: dict, plant_data: dict, 
                 "_Panel_Voltage": "Panel_Voltage",
                 "_Panel_Current": "Panel_Current",
                 "_Panel_Power": "Panel_Power",
+                "_String_Current_1": "String_Current",
+                "_String_Current_2": "String_Current",
+                "_String_Current_3": "String_Current",
+                "_String_Current_4": "String_Current",
             }
 
             for suffix, base_name in panel_suffixes.items():

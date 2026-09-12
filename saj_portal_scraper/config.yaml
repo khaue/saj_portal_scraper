@@ -1,12 +1,11 @@
 # Add-on Configuration
 name: "SAJ Portal Scraper"
-version: "1.0.27"
+version: "1.0.28"
 slug: saj_portal_scraper
 description: "Fetches data from SAJ Portal using web scraping and publishes via MQTT."
 arch:
   - aarch64
   - amd64
-  - armv7
 environment:
   SUPERVISOR_TOKEN: "{{ SUPERVISOR_TOKEN }}"
   TZ: "{{ TZ }}"
@@ -36,6 +35,7 @@ options: # User-configurable options
   saj_password: ""
   # Keep microinverters as a string for simplicity in config UI
   microinverters: "YOUR_SN1:Alias1,YOUR_SN2:Alias2"
+  string_current_enabled: false
   inactivity_enabled: true
   inactivity_start_time: "21:00"
   inactivity_end_time: "05:30"
@@ -55,6 +55,7 @@ schema: # Defines the UI for the options
   saj_username: str
   saj_password: password
   microinverters: str
+  string_current_enabled: bool
   inactivity_enabled: bool
   inactivity_start_time: str
   inactivity_end_time: str

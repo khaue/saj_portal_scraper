@@ -1,5 +1,7 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/base:3.19
-FROM ${BUILD_FROM}
+#ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+#FROM ${BUILD_FROM}
+FROM ghcr.io/home-assistant/base:latest
+
 
 ENV LANG=C.UTF-8
 
@@ -52,10 +54,10 @@ RUN apk add --no-cache \
 # Instala geckodriver compatível com arquitetura
 RUN set -ex; \
     case "${BUILD_ARCH}" in \
-        amd64) ARCH="linux64" ;; \
-        aarch64) ARCH="linux-aarch64" ;; \
-        armv7) ARCH="linux-arm7hf" ;; \
-        *) ARCH="linux64" ;; \
+    amd64) ARCH="linux64" ;; \
+    aarch64) ARCH="linux-aarch64" ;; \
+    armv7) ARCH="linux-arm7hf" ;; \
+    *) ARCH="linux64" ;; \
     esac; \
     URL="https://github.com/mozilla/geckodriver/releases/download/${GECKODRIVER_VERSION}/geckodriver-${GECKODRIVER_VERSION}-${ARCH}.tar.gz"; \
     echo "Downloading: $URL"; \

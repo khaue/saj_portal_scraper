@@ -37,22 +37,51 @@ from const import (
     FIREFOX_BINARY_PATH,
     COLUMN_MAPPING,
     build_saj_urls,
+    build_device_data_url,
     USERNAME_SELECTOR,
     PASSWORD_SELECTOR,
     DEFAULT_USERNAME,
     DEFAULT_PASSWORD,
     DEFAULT_MICROINVERTERS,
+    CONF_STRING_CURRENT_ENABLED,
+    DEFAULT_STRING_CURRENT_ENABLED,
     FIREFOX_PROFILE_PATH
 )
 
+
+def _save_debug_html(page_html, driver_url, prefix="saj_debug_login_failed"):
+    """Persist a HTML dump of a failed page to a writable, persistent location."""
+    timestamp = int(time.time())
+    dedicated_dir = "/config/www/saj_debug"
+    os.makedirs(dedicated_dir, exist_ok=True)
+
+    target_path = os.path.join(dedicated_dir, f"{prefix}_{timestamp}.html")
+    try:
+        with open(target_path, "w", encoding="utf-8") as f:
+            f.write(f"<!-- URL: {driver_url} -->\n")
+            f.write(page_html)
+        return target_path
+    except Exception as dump_err:
+        _LOGGER.debug("Could not write debug HTML to %s: %s", dedicated_dir, dump_err)
+
+    fallback_path = f"/tmp/{prefix}_{timestamp}.html"
+    try:
+        with open(fallback_path, "w", encoding="utf-8") as f:
+            f.write(f"<!-- URL: {driver_url} -->\n")
+            f.write(page_html)
+        return fallback_path
+    except Exception as dump_err:
+        _LOGGER.error("Failed to save page source during login failure: %s", dump_err)
+        return None
+
+
 def is_session_expired(driver, config):
     """Detects if the session has expired by checking if it is on the login screen."""
-    saj_urls = build_saj_urls(config)
-    login_url = saj_urls["LOGIN_URL"]
     _LOGGER.debug(f"Checking expired session...")
     try:
-        # Check if on the login URL
-        if login_url in driver.current_url:
+        # The application keeps /login as the base path for authenticated routes.
+        # Only the SPA login fragment identifies the actual login screen.
+        if "#/login" in driver.current_url:
             return True
         # Check if the username field is present
         login_fields = driver.find_elements(By.CSS_SELECTOR, USERNAME_SELECTOR)
@@ -80,7 +109,7 @@ def _is_data_url_in(driver, config):
 def _perform_login(driver, config):
     """Performs login using the provided driver and config. Returns True if successful."""
     saj_urls = build_saj_urls(config)
-    login_url = saj_urls["LOGIN_URL"]
+    login_url = f'{saj_urls["LOGIN_URL"]}#/login?redirect=/'
     dashboard_url = saj_urls["DASHBOARD_URL"]
     try:
         _LOGGER.info("Attempting to log in to SAJ Portal...")
@@ -88,25 +117,86 @@ def _perform_login(driver, config):
         password = config.get("saj_password", DEFAULT_PASSWORD)
         driver.get(login_url)
         wait = WebDriverWait(driver, 30)
-        username_field = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, USERNAME_SELECTOR)))
-        password_field = driver.find_element(By.CSS_SELECTOR, PASSWORD_SELECTOR)
+
+        # Accept cookies if the banner is present.
+        try:
+            accept_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[normalize-space()='I Accept' or normalize-space()='Accept']")))
+            accept_btn.click()
+        except Exception:
+            pass
+
+        username_field = None
+        password_field = None
+
+        for selector in [
+            USERNAME_SELECTOR,
+            '#form_item_username',
+            'input[autocomplete="username"]',
+            'input[placeholder="Username/Email"]',
+            'input[placeholder="Please enter"]:not([type="password"])',
+        ]:
+            try:
+                username_field = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
+                break
+            except Exception:
+                continue
+
+        for selector in [
+            PASSWORD_SELECTOR,
+            '#form_item_password',
+            'input[autocomplete="current-password"]',
+            'input[type="password"]',
+            'input[placeholder="Please enter"][type="password"]',
+        ]:
+            try:
+                password_field = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
+                break
+            except Exception:
+                continue
+
+        if not username_field or not password_field:
+            raise NoSuchElementException("Could not find username/password fields on the login page")
+
         username_field.clear()
         username_field.send_keys(username)
         password_field.clear()
         password_field.send_keys(password)
-        password_field.send_keys(Keys.RETURN)
-        wait.until(EC.url_to_be(dashboard_url))
+
+        # Try Enter first; if that does not submit, click the login button.
+        try:
+            password_field.send_keys(Keys.RETURN)
+            wait.until(lambda current_driver: "#/login" not in current_driver.current_url)
+        except Exception:
+            submit_selectors = [
+                "//button[normalize-space()='Login']",
+                "//*[self::button or self::div or self::span][normalize-space()='Login']",
+                "//button[contains(@class, 'ant-btn') and .//span[normalize-space()='Login']]"
+            ]
+            submitted = False
+            for xpath in submit_selectors:
+                try:
+                    submit_btn = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                    submit_btn.click()
+                    submitted = True
+                    break
+                except Exception:
+                    continue
+            if not submitted:
+                raise NoSuchElementException("Could not find the login submission button")
+
+            wait.until(lambda current_driver: "#/login" not in current_driver.current_url)
+
         _LOGGER.info("Login successful.")
         return True
     except Exception as login_err:
         _LOGGER.error("Login failed: %s", login_err)
         try:
             page_html = driver.page_source
-            filename = f"/data/saj_debug_login_failed_{int(time.time())}.html"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(f"<!-- URL: {driver.current_url} -->\n")
-                f.write(page_html)
-            _LOGGER.error(f"Page source saved to {filename} for debugging login failure. URL: {driver.current_url}")
+            filename = _save_debug_html(page_html, driver.current_url)
+            if filename:
+                _LOGGER.error("Page source saved to %s for debugging login failure. URL: %s", filename, driver.current_url)
+            else:
+                _LOGGER.error("Page source could not be saved for debugging login failure. URL: %s", driver.current_url)
         except Exception as dump_err:
             _LOGGER.error("Failed to save page source during login failure: %s", dump_err)
         return False
@@ -122,8 +212,24 @@ def validate_connection(config: dict) -> webdriver.Firefox:
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-extensions")
     options.add_argument("--disable-software-rasterizer")
-    #options.add_argument(f"--profile")
-    #options.add_argument(FIREFOX_PROFILE_PATH)
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-breakpad")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-translate")
+    options.add_argument("--disable-notifications")
+    options.add_argument("--disable-web-security")
+    # Reduce rendering work and network activity.
+    options.set_preference("permissions.default.image", 2)
+    options.set_preference("dom.ipc.plugins.enabled", False)
+    options.set_preference("media.peerconnection.enabled", False)
+    options.set_preference("network.prefetch-next", False)
+    options.set_preference("network.dns.disablePrefetch", True)
+    options.set_preference("browser.cache.disk.enable", False)
+    options.set_preference("browser.cache.memory.enable", False)
+    options.set_preference("browser.cache.offline.enable", False)
+    options.set_preference("network.http.use-cache", False)
+    options.set_preference("dom.disable_beforeunload", True)
     options.set_preference("security.sandbox.content.level", 0)
 
     options.binary_location = FIREFOX_BINARY_PATH
@@ -196,30 +302,76 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
 
     for device_sn, device_alias in microinverter_map.items():
         saj_urls = build_saj_urls(config)
-        data_url = saj_urls["DATA_URL_TEMPLATE"].format(device_sn=device_sn)
-        _LOGGER.info("Fetching data for device %s (%s)...", device_alias, device_sn)
+        data_url = build_device_data_url(config, device_sn)
+        _LOGGER.info("Fetching data for device %s (%s) via %s...", device_alias, device_sn, data_url)
 
         max_attempts = 2  # Try each microinverter up to 2 times on connection errors
         attempt = 0
         while attempt < max_attempts:
             try:
                 attempt += 1
-                _LOGGER.debug(f"Calling driver.GET: {data_url} (microinverter attempt {attempt}/{max_attempts})")
+                _LOGGER.debug(f"Calling driver.get: {data_url} (microinverter attempt {attempt}/{max_attempts})")
                 if not driver_get_with_retry(driver, data_url):
                     raise WebDriverException(f"Failed to load URL {data_url} after retries.")
-                time.sleep(4)
                 _LOGGER.debug("Calling WebDriverWait...")
-                WebDriverWait(driver, wait_timeout,poll_frequency=2).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr"))
-                )
+                wait = WebDriverWait(driver, wait_timeout, poll_frequency=2)
+
+                operational_data_selectors = [
+                    "//*[normalize-space()='Operational Data']",
+                    "//*[normalize-space()='Operational data']",
+                    "//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'operational data')]",
+                ]
+                table_row_selectors = [
+                    ".el-table__body-wrapper tbody tr",
+                    ".ant-table-tbody tr",
+                    ".vxe-table--body tbody tr",
+                    "table tbody tr",
+                ]
+
+                def find_operational_data_or_table(current_driver):
+                    for selector in operational_data_selectors:
+                        buttons = current_driver.find_elements(By.XPATH, selector)
+                        for button in buttons:
+                            if button.is_displayed() and button.is_enabled():
+                                return True
+                    return any(
+                        current_driver.find_elements(By.CSS_SELECTOR, selector)
+                        for selector in table_row_selectors
+                    )
+
+                wait.until(find_operational_data_or_table)
+
+                def find_data_rows(current_driver):
+                    for selector in table_row_selectors:
+                        rows = current_driver.find_elements(By.CSS_SELECTOR, selector)
+                        if rows:
+                            return rows
+                    return False
+
+                operational_data_button = None
+                for selector in operational_data_selectors:
+                    buttons = driver.find_elements(By.XPATH, selector)
+                    operational_data_button = next(
+                        (button for button in buttons if button.is_displayed() and button.is_enabled()),
+                        None,
+                    )
+                    if operational_data_button is not None:
+                        break
+
+                if operational_data_button is not None:
+                    _LOGGER.debug("Opening Operational Data tab for device %s.", device_alias)
+                    driver.execute_script("arguments[0].click();", operational_data_button)
+                else:
+                    _LOGGER.debug("Operational Data tab was not found; checking for an already visible data table.")
+
+                rows = wait.until(find_data_rows)
                 _LOGGER.debug("WebDriverWait called successfully.")
 
                 if not _is_data_url_in(driver, config):
-                    raise WebDriverException("Failed to establish a new connection: Failed to navigate to data URL.")
+                    raise WebDriverException("Current URL is not the expected device data URL.")
 
                 _LOGGER.debug("Data table founded for device %s.", device_alias)
                 device_data_rows = {}
-                rows = driver.find_elements(By.CSS_SELECTOR, ".el-table__body-wrapper tbody tr")
                 _LOGGER.debug("Found %d rows in the table for device %s.", len(rows), device_alias)
 
                 if not rows:
@@ -229,9 +381,15 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                 row = rows[0]
                 cols = row.find_elements(By.TAG_NAME, "td")
                 col_count = len(cols)
+                column_mapping = dict(COLUMN_MAPPING)
+                if not config.get(CONF_STRING_CURRENT_ENABLED, DEFAULT_STRING_CURRENT_ENABLED):
+                    column_mapping.pop("String_Current", None)
+                if "vxe-table--body" in (rows[0].find_element(By.XPATH, "./ancestor::table").get_attribute("class") or ""):
+                    # The current vxe table includes Server time before ModuleSignal.
+                    column_mapping["Strength_Signal"] = 18
 
                 raw_row_data = {}
-                for column_name, column_index in COLUMN_MAPPING.items():
+                for column_name, column_index in column_mapping.items():
                     if column_index >= col_count:
                         _LOGGER.warning("Column index %d for '%s' out of range (max %d) for device %s.",
                                         column_index, column_name, col_count -1, device_alias)
@@ -262,8 +420,8 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
 
                 for column_name, raw_value in raw_row_data.items():
                     if column_name not in ["Update_time"]:
-                        if column_name in ["Panel_Voltage", "Panel_Current", "Panel_Power"]:
-                            channel_col_index = COLUMN_MAPPING.get("Panel_Channel")
+                        if column_name in ["Panel_Voltage", "Panel_Current", "Panel_Power", "String_Current"]:
+                            channel_col_index = column_mapping.get("Panel_Channel")
                             raw_channel_value = raw_row_data.get("Panel_Channel")
                             if channel_col_index is not None and raw_channel_value is not None and raw_value is not None:
                                 channel_values = raw_channel_value.split("\n")
@@ -274,7 +432,12 @@ def _fetch_data_sync(config: dict, driver: webdriver.Firefox, force_relogin: boo
                                     for i in range(num_channels):
                                         channel_key = channel_values[i].strip().upper()
                                         if channel_key:
-                                            row_data[f"{channel_key}_{column_name}"] = values[i].strip()
+                                            if column_name == "String_Current":
+                                                string_currents = [value.strip() for value in values[i].split("-")]
+                                                for string_index, string_current in enumerate(string_currents, start=1):
+                                                    row_data[f"{channel_key}_String_Current_{string_index}"] = string_current
+                                            else:
+                                                row_data[f"{channel_key}_{column_name}"] = values[i].strip()
                                 else:
                                     row_data[column_name] = raw_value
                             elif raw_value is not None:
@@ -376,11 +539,10 @@ def driver_get_with_retry(driver, url):
     Adds a delay (sleep) before each attempt.
     Returns True if successful, False otherwise.
     """
-    max_attempts=3
-    delay_seconds=5
+    max_attempts = 3
+    delay_seconds = 5
     for attempt in range(1, max_attempts + 1):
         try:
-            time.sleep(2)
             _LOGGER.debug(f"Driver.get attempt {attempt}/{max_attempts} - driver.get({url})")
             driver.get(url)
             return True
@@ -389,13 +551,12 @@ def driver_get_with_retry(driver, url):
             if attempt == max_attempts:
                 _LOGGER.error(f"All {max_attempts} attempts to load URL {url} failed.")
                 return False
-            else:
-                _LOGGER.info(f"Retrying in {delay_seconds} seconds...")
+            _LOGGER.info(f"Retrying in {delay_seconds} seconds...")
+            time.sleep(delay_seconds)
         except Exception as e:
             _LOGGER.error(f"Unexpected error on attempt {attempt} to load URL {url}: {e}")
             if attempt == max_attempts:
                 _LOGGER.error(f"All {max_attempts} attempts to load URL {url} failed.")
                 return False
-            else:
-                _LOGGER.info(f"Retrying in {delay_seconds} seconds...")
-        time.sleep(delay_seconds)
+            _LOGGER.info(f"Retrying in {delay_seconds} seconds...")
+            time.sleep(delay_seconds)
