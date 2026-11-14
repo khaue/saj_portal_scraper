@@ -1,6 +1,6 @@
 # /workspaces/addons/saj_portal_scraper/requirements.txt
 paho-mqtt>=1.6,<2.0
-selenium==4.11.2
 debugpy==1.6.7
 requests>=2.28.0,<3.0
 pyyaml>=6.0
+pycryptodome>=3.20,<4.0

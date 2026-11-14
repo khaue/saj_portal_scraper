@@ -6,7 +6,6 @@ import logging
 import signal
 import sys
 import os
-import subprocess # <-- ADDED for version checking
 from datetime import date, datetime
 
 from const import (
@@ -27,17 +26,15 @@ from const import (
     CONF_EXTENDED_UPDATE_INTERVAL,
     DEFAULT_DATA_INACTIVITY_THRESHOLD,
     DEFAULT_EXTENDED_UPDATE_INTERVAL,
-    FIREFOX_BINARY_PATH, # <-- ADDED for version checking
-    GECKODRIVER_PATH,    # <-- ADDED for version checking
-    build_saj_urls,  # Importa função para URLs dinâmicas
 )
-import web_scraper
+import api_scraper
 import utils
 import mqtt_utils
 import persistence
 import requests
 
 OPTIONS_FILE = "/data/options.json"
+
 CONFIG = {}
 ADDON_VERSION = ""
 
@@ -46,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # --- Global State ---
 mqtt_client = None
-webdriver = None
+saj_client = None
 shutdown_requested = False
 current_peak_power: float = 0.0
 last_reset_date: date | None = None
@@ -93,57 +90,6 @@ def log_supervisor_info():
         _LOGGER.info(f"Supervisor Info: {data}")
     except requests.RequestException as e:
         _LOGGER.error(f"Error fetching Supervisor info: {e}")
-
-# --- Function to Log Driver Versions ---
-def log_driver_versions():
-    """Logs the versions of Firefox and Geckodriver found."""
-    _LOGGER.info("--- Checking WebDriver Component Versions ---")
-
-    # Check Firefox Version
-    try:
-        if os.path.exists(FIREFOX_BINARY_PATH):
-            result = subprocess.run(
-                [FIREFOX_BINARY_PATH, '--version'],
-                capture_output=True, text=True, check=True, encoding='utf-8'
-            )
-            # Pega a primeira linha da saída, que geralmente contém a versão
-            version_line = result.stdout.strip().splitlines()[0]
-            _LOGGER.info(f"Firefox Version ({FIREFOX_BINARY_PATH}): {version_line}")
-        else:
-            _LOGGER.warning(f"Firefox binary not found at specified path: {FIREFOX_BINARY_PATH}")
-    except FileNotFoundError:
-         _LOGGER.error(f"Firefox command '{FIREFOX_BINARY_PATH}' not found in the system.")
-    except subprocess.CalledProcessError as e:
-        _LOGGER.error(f"Failed to get Firefox version. Command failed: {e}")
-        if e.stderr: _LOGGER.error(f"Stderr: {e.stderr.strip()}")
-    except Exception as e:
-        _LOGGER.error(f"An unexpected error occurred while checking Firefox version: {e}", exc_info=True)
-
-    # Check Geckodriver Version
-    try:
-        if os.path.exists(GECKODRIVER_PATH):
-            result = subprocess.run(
-                [GECKODRIVER_PATH, '--version'],
-                capture_output=True, text=True, check=True, encoding='utf-8'
-            )
-            # Geckodriver pode ter múltiplas linhas, a primeira geralmente tem a versão dele
-            version_line = result.stdout.strip().splitlines()[0]
-            _LOGGER.info(f"Geckodriver Version ({GECKODRIVER_PATH}): {version_line}")
-            # Logar também a segunda linha se existir (pode conter info do Firefox compatível)
-            if len(result.stdout.strip().splitlines()) > 1:
-                 _LOGGER.info(f"Geckodriver Info Line 2: {result.stdout.strip().splitlines()[1]}")
-        else:
-             _LOGGER.warning(f"Geckodriver binary not found at specified path: {GECKODRIVER_PATH}")
-    except FileNotFoundError:
-         _LOGGER.error(f"Geckodriver command '{GECKODRIVER_PATH}' not found in the system.")
-    except subprocess.CalledProcessError as e:
-        _LOGGER.error(f"Failed to get Geckodriver version. Command failed: {e}")
-        if e.stderr: _LOGGER.error(f"Stderr: {e.stderr.strip()}")
-    except Exception as e:
-        _LOGGER.error(f"An unexpected error occurred while checking Geckodriver version: {e}", exc_info=True)
-
-    _LOGGER.info("--- Finished Checking WebDriver Component Versions ---")
-# --- End Function to Log Driver Versions ---
 
 # --- Function to Log Environment Info ---
 def log_environment_info():
@@ -204,8 +150,7 @@ def load_config():
             _LOGGER.info(f"Configuration loaded successfully. Log level set to {log_level}")
 
             if log_level == "DEBUG":
-                _LOGGER.info("Setting log level for 'selenium' and 'urllib3' to WARNING to reduce noise.")
-                logging.getLogger("selenium").setLevel(logging.WARNING)
+                _LOGGER.info("Setting log level for 'urllib3' to WARNING to reduce noise.")
                 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
             # Basic validation warnings
@@ -243,7 +188,7 @@ def load_config():
     _LOGGER.info(f"Add-on version: {ADDON_VERSION}")
 
 def cleanup():
-    global mqtt_client, webdriver
+    global mqtt_client, saj_client
     _LOGGER.info("Performing cleanup...")
     if mqtt_client:
         try:
@@ -257,19 +202,19 @@ def cleanup():
         except Exception as e:
             _LOGGER.error(f"Error during MQTT cleanup: {e}")
         mqtt_client = None
-    if webdriver:
+    if saj_client:
         try:
-            _LOGGER.info("Quitting WebDriver...")
-            webdriver.quit()
-            _LOGGER.info("WebDriver quit.")
+            _LOGGER.info("Closing SAJ API session...")
+            saj_client.close()
+            _LOGGER.info("SAJ API session closed.")
         except Exception as e:
-            _LOGGER.error(f"Error quitting WebDriver: {e}")
-        webdriver = None
+            _LOGGER.error(f"Error closing SAJ API session: {e}")
+        saj_client = None
     _LOGGER.info("Cleanup finished.")
 
 
 def run_cycle():
-     global webdriver, current_peak_power, last_reset_date, mqtt_client, initial_setup_done
+     global saj_client, current_peak_power, last_reset_date, mqtt_client, initial_setup_done
      global last_known_update_times, last_data_change_timestamp, using_extended_interval, last_plant_data
 
      # High priority check: Configured inactivity period
@@ -279,19 +224,18 @@ def run_cycle():
          if using_extended_interval:
              _LOGGER.info("Resetting extended interval flag due to entering inactivity period.")
              using_extended_interval = False
-         cleanup_webdriver()
+         cleanup_api_client()
          return
 
-     # Ensure WebDriver is running
-     if not webdriver or not web_scraper._is_driver_connected(webdriver):
+     # Ensure an authenticated HTTP session is available.
+     if not saj_client or not saj_client.is_authenticated:
          try:
-             _LOGGER.info("WebDriver not active. Attempting to validate connection and log in...")
-             webdriver = web_scraper.validate_connection(CONFIG)
-             _LOGGER.info("Connection validated and logged in successfully.")
-         except (ValueError, RuntimeError, Exception) as e:
-             _LOGGER.error(f"Failed to establish WebDriver connection or log in: {e}. Will retry next cycle.")
-             cleanup_webdriver()
-             webdriver = None
+             _LOGGER.info("SAJ API session not active. Authenticating...")
+             saj_client = api_scraper.validate_connection(CONFIG)
+             _LOGGER.info("SAJ API authentication succeeded.")
+         except (ValueError, api_scraper.SajApiError, requests.RequestException) as e:
+             _LOGGER.error(f"Failed to authenticate with SAJ API: {e}. Will retry next cycle.")
+             cleanup_api_client()
              return
 
      # Fetch Data
@@ -302,12 +246,17 @@ def run_cycle():
          if not using_extended_interval and getattr(run_cycle, "_last_cycle_was_extended", False):
              _LOGGER.info("Detected return from inactivity/extended interval. Forcing re-login.")
              force_relogin = True
-         device_data = web_scraper._fetch_data_sync(CONFIG, webdriver, force_relogin=force_relogin)
+         device_data, saj_client = api_scraper._fetch_data_sync(
+             CONFIG,
+             saj_client,
+             force_relogin=force_relogin,
+         )
          run_cycle._last_cycle_was_extended = using_extended_interval
 
          if not device_data:
              _LOGGER.warning("No device data fetched in this cycle.")
-             # Cannot check for data changes if no data was fetched
+             # Sessão possivelmente quebrada: recomeça do zero no próximo ciclo
+             cleanup_api_client()
              return
 
          plant_data = None
@@ -422,26 +371,21 @@ def run_cycle():
      # Error Handling
      except ValueError as e: # Typically login/config errors
           _LOGGER.error(f"Authentication or configuration error during cycle: {e}")
-          cleanup_webdriver()
-     except (web_scraper.WebDriverException, web_scraper.TimeoutException) as e: # Selenium errors
-          _LOGGER.error(f"Selenium error during data fetch: {e}. WebDriver might be stale.")
-          cleanup_webdriver()
+          cleanup_api_client()
+     except api_scraper.SajApiError as e:
+          _LOGGER.error(f"SAJ API error during data fetch: {e}")
+          cleanup_api_client()
      except Exception as e: # Unexpected errors
          _LOGGER.exception(f"Unexpected error during processing cycle: {e}")
-     finally:
-         if webdriver:
-             _LOGGER.debug("Cleaning up WebDriver after cycle to avoid memory growth.")
-             cleanup_webdriver()
 
-def cleanup_webdriver():
-    global webdriver
-    if webdriver:
+def cleanup_api_client():
+    global saj_client
+    if saj_client:
         try:
-            _LOGGER.debug("Force quitting webdriver to free memory...")
-            webdriver.quit()
-        except:
-            pass
-        webdriver = None
+            saj_client.close()
+        except requests.RequestException as e:
+            _LOGGER.warning("Error while closing SAJ API session: %s", e)
+        saj_client = None
 
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, handle_shutdown)
@@ -451,11 +395,10 @@ if __name__ == "__main__":
     # Load configuration
     load_config()
 
-   # Only log Docker, driver, and supervisor info if log level is DEBUG or lower (more verbose)
+   # Only log Docker and Supervisor info if log level is DEBUG or lower (more verbose)
     log_level = logging.getLogger().getEffectiveLevel()
     if log_level <= logging.DEBUG:
         log_docker_image_info()
-        log_driver_versions()
         log_supervisor_info()
 
     current_peak_power, last_reset_date = persistence.load_peak_power_state()
@@ -508,6 +451,7 @@ if __name__ == "__main__":
                 # Use extended interval if the flag is set
                 if using_extended_interval:
                     current_interval_to_use = extended_update_interval
+                    cleanup_api_client()
 
             # Calculate sleep time
             sleep_time = max(0, current_interval_to_use - duration)

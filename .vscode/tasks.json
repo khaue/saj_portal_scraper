@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Home Assistant",
+            "type": "shell",
+            "command": "supervisor_run",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "home-assistant"
+            }
+        }
+    ],
+    "options": {
+        "shell": {
+            "executable": "/bin/bash"
+        }
+    }
+}

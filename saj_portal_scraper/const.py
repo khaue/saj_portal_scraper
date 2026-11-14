@@ -1,8 +1,6 @@
 # /workspaces/addons/saj_portal_scraper/const.py
 """Constants for the SAJ Portal Scraper Add-on."""
 
-from urllib.parse import quote
-
 # Add-on domain/slug
 DOMAIN = "saj_portal_scraper"
 
@@ -20,11 +18,6 @@ DEFAULT_MICROINVERTERS = {
 CONF_STRING_CURRENT_ENABLED = "string_current_enabled"
 DEFAULT_STRING_CURRENT_ENABLED = False
 
-# --- Paths (Inside Container) ---
-GECKODRIVER_PATH = "/usr/local/bin/geckodriver"
-# Path matches the one in the base Docker image
-FIREFOX_BINARY_PATH = "/usr/bin/firefox-esr"
-
 # --- SAJ Portal Specifics ---
 # URLs for all possible SAJ portals
 BASE_SAJ_URLS = [
@@ -34,48 +27,7 @@ BASE_SAJ_URLS = [
 ]
 DEFAULT_BASE_SAJ_URL = "https://iop.saj-electric.com"
 
-def build_saj_urls(config):
-    """
-    Build the main SAJ portal URLs dynamically based on the config['base_saj_url'] value.
-    Returns the login, dashboard, and data URL templates used by the scraper.
-    """
-    base_url = config.get("base_saj_url", DEFAULT_BASE_SAJ_URL).rstrip("/")
-    return {
-        "LOGIN_URL": f"{base_url}/login",
-        "DASHBOARD_URL": f"{base_url}/index",
-        "DATA_URL_TEMPLATE": f"{base_url}/login#/monitor/deviceDetail/inverterDetail?deviceSn={{device_sn}}"
-    }
-
-
-def build_device_data_url(config, device_sn):
-    """Build a device detail URL compatible with the current SAJ portal layout."""
-    base_url = config.get("base_saj_url", DEFAULT_BASE_SAJ_URL).rstrip("/")
-    return f"{base_url}/login#/monitor/deviceDetail/inverterDetail?deviceSn={quote(device_sn, safe='')}"
-
-
-USERNAME_SELECTOR = "#form_item_username, input[placeholder=\"Username/Email\"], input[autocomplete=\"username\"]"
-PASSWORD_SELECTOR = "#form_item_password, input[type=\"password\"], input[autocomplete=\"current-password\"]"
-
-# --- Data Extraction Mapping (Column Index on SAJ Portal Table) ---
-COLUMN_MAPPING = {
-    "ID": 0,
-    "Update_time": 1,
-    "Panel_Channel": 3,
-    "Panel_Voltage": 4,
-    "Panel_Current": 5,
-    "Panel_Power": 6,
-    "String_Current": 7,
-    "Phase": 8,
-    "Voltage": 9,
-    "Current": 10,
-    "Frequency": 11,
-    "Power": 12,
-    "Energy_Today": 13,
-    "Energy_This_Month": 14,
-    "Energy_This_Year": 15,
-    "Energy_Total": 16,
-    "Strength_Signal": 17,
-}
+SAJ_API_PREFIX = ""
 
 # --- Sensor Property Mappings (Used for MQTT Discovery) ---
 UNIT_MAPPING = {
@@ -161,4 +113,3 @@ PEAK_POWER_TODAY_NAME = "Peak Power Today"
 
 # --- Persistence ---
 PERSISTENCE_FILE = "/data/peak_power_state.json" # Path inside container mapped to host
-FIREFOX_PROFILE_PATH = "/data/firefox_profile"

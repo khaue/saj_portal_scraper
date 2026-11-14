@@ -14,6 +14,7 @@
 # 4. Mesmo assim, ignore coisas específicas dentro da pasta liberada
 # (por exemplo: __pycache__, arquivos .pyc, etc.)
 saj_portal_scraper/__pycache__/
+saj_portal_scraper/tests/
 saj_portal_scraper/*.py[cod]
 saj_portal_scraper/*$py.class
 
@@ -26,5 +27,8 @@ logs/
 .venv
 *.egg-info/
 .vscode/
+!/.vscode/
+!/.vscode/tasks.json
+!/.vscode/settings.json
 .DS_Store
 Thumbs.db

@@ -3,7 +3,7 @@ import paho.mqtt.client as mqtt
 import json
 import logging
 import os
-import time
+import threading
 from datetime import date
 
 from const import (
@@ -31,26 +31,17 @@ def get_mqtt_config(addon_config):
     username = addon_config.get("mqtt_username")
     password = addon_config.get("mqtt_password")
 
-    # If host is not manually configured, try to get from Supervisor service discovery
+    # Supervisor exposes MQTT_HOST/PORT/USERNAME/PASSWORD for mqtt:need services.
     if not host:
-        try:
-            _LOGGER.info("MQTT host not found in config, trying Supervisor service discovery...")
-            host = os.getenv("MQTT_BROKER")
-            port = int(os.getenv("MQTT_PORT", 1883))
-            username = os.getenv("MQTT_USERNAME")
-            password = os.getenv("MQTT_PASSWORD")
-            if host:
-                _LOGGER.info("Using Supervisor-provided MQTT configuration.")
-            else:
-                # This case might happen if the MQTT service is not available/linked
-                _LOGGER.error("MQTT host not found in Supervisor-provided MQTT configuration.")
-        except (json.JSONDecodeError, KeyError, TypeError, FileNotFoundError) as e:
-            _LOGGER.warning(f"Could not parse Supervisor MQTT service info: {e}. Manual config needed or MQTT might fail.")
-            # Continue, manual config might still work
-    elif not host:
-         # Explicitly check if host is still missing after trying Supervisor
-         _LOGGER.error("MQTT host not configured and Supervisor service unavailable.")
-         return None
+        host = os.getenv("MQTT_HOST") or os.getenv("MQTT_BROKER")
+        if host:
+            _LOGGER.info("Using Supervisor-provided MQTT host.")
+    if not username:
+        username = os.getenv("MQTT_USERNAME")
+    if not password:
+        password = os.getenv("MQTT_PASSWORD")
+    if not port:
+        port = os.getenv("MQTT_PORT", 1883)
 
     if not port:
         port = 1883 # Default MQTT port
@@ -82,17 +73,43 @@ def connect_mqtt(client_id: str, config: dict) -> mqtt.Client | None:
         client.username_pw_set(mqtt_config["username"], mqtt_config.get("password"))
 
     try:
+        connection_result = threading.Event()
+        connection_status = {"reason_code": None}
+
+        def on_connect(_client, _userdata, _flags, reason_code):
+            connection_status["reason_code"] = reason_code
+            connection_result.set()
+
+        client.on_connect = on_connect
         _LOGGER.info(f"Connecting to MQTT broker at {mqtt_config['host']}:{mqtt_config['port']}...")
         client.connect(mqtt_config['host'], mqtt_config['port'], 60)
         client.loop_start()
-        time.sleep(1) # Short pause to allow connection establishment
+        if connection_result.wait(10):
+            reason_code = connection_status["reason_code"]
+            if reason_code != 0:
+                _LOGGER.error(
+                    "MQTT broker rejected the connection (reason code %s). "
+                    "Check broker availability and MQTT credentials.",
+                    reason_code,
+                )
+                client.loop_stop()
+                return None
+        else:
+            _LOGGER.error(
+                "Timed out waiting for the MQTT broker CONNACK from %s:%s.",
+                mqtt_config["host"],
+                mqtt_config["port"],
+            )
+            client.loop_stop()
+            return None
+
         if client.is_connected():
              _LOGGER.info("MQTT connected successfully.")
              # Publish online status upon successful connection
              client.publish(MQTT_AVAILABILITY_TOPIC, payload=MQTT_PAYLOAD_ONLINE, qos=1, retain=True)
              return client
         else:
-             _LOGGER.error("MQTT connection attempt failed (client not connected after connect call).")
+             _LOGGER.error("MQTT broker accepted CONNACK but the client is not connected.")
              client.loop_stop()
              return None
     except Exception as e:
@@ -361,4 +378,3 @@ def publish_state(client: mqtt.Client, device_data: dict, plant_data: dict, peak
     except Exception as e:
         # Catch errors during the publish call itself
         _LOGGER.error(f"Failed to publish peak power state TO {peak_state_topic}: {e}")
-

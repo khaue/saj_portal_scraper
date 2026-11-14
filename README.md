@@ -8,15 +8,13 @@
 <!-- [![GitHub Activity][commits-shield]][commits] -->
 <!-- [![GitHub Issues][issues-shield]][issues] -->
 
-This Home Assistant add-on fetches data from SAJ microinverters directly from the eSolar Portal (SAJ) using web scraping and publishes the information via MQTT, allowing integration with Home Assistant through automatic discovery (MQTT Discovery).
-
-**This add-on uses web scraping, which may be unstable if the layout or structure of the SAJ Portal website changes. Use at your own risk.**
+This Home Assistant add-on uses the SAJ eSolar Portal API to fetch data from configured microinverters and publishes it via MQTT for automatic discovery in Home Assistant.
 
 ## Prerequisites
 
 1.  **Home Assistant:** A working Home Assistant installation.
 2.  **MQTT Broker:** An MQTT broker configured and running, accessible by Home Assistant. The official [Mosquitto broker](https://github.com/home-assistant/addons/tree/master/mosquitto) add-on is recommended.
-3.  **MQTT Credentials:** If your MQTT broker requires authentication, you will need the username and password. If using the Mosquitto add-on with the default integration, the Supervisor can provide the credentials automatically.
+3.  **MQTT Credentials:** If the broker requires authentication, configure a broker user and password in the add-on options, or allow the Supervisor-provided MQTT credentials to be used by leaving those fields blank. The Home Assistant login credentials are not necessarily the MQTT credentials.
 4.  **SAJ Portal Credentials:** Your username and password to access the [eSolar Portal (SAJ)](https://iop.saj-electric.com/login).
 
 ## Installation
@@ -53,8 +51,8 @@ After installation, go to the **Configuration** tab of the add-on to set the req
 | `extended_update_interval_seconds`  | Interval (in seconds) between fetches when the add-on detects no new data (likely end of day). Minimum 60.                                                                                                                     | Integer  | No       | `3600` (1 hour)                                           |
 | `mqtt_host`                         | Address of your MQTT broker.                                                                                                                                                                                                   | String   | No       | `"core-mosquitto"` (Default for Mosquitto add-on)         |
 | `mqtt_port`                         | Port of your MQTT broker.                                                                                                                                                                                                      | Integer  | No       | `1883`                                                    |
-| `mqtt_username`                     | Username for the MQTT broker (leave blank if using Supervisor/Mosquitto credentials).                                                                                                                                          | String   | No       | `""`                                                      |
-| `mqtt_password`                     | Password for the MQTT broker (leave blank if using Supervisor/Mosquitto credentials).                                                                                                                                          | Password | No       | `""`                                                      |
+| `mqtt_username`                     | Username for the MQTT broker. Leave blank to use credentials supplied by the Supervisor, when available.                                                                                                                       | String   | No       | `""`                                                      |
+| `mqtt_password`                     | Password for the MQTT broker. Leave blank to use credentials supplied by the Supervisor, when available.                                                                                                                      | Password | No       | `""`                                                      |
 | `debug_mode`                        | Enable detailed debug mode for advanced diagnostics.                                                                                                                                                                           | List     | No       | `false`                                                   |
 
 **Important about Timezone:** The `timezone` setting is essential for the add-on to correctly interpret the times read from the SAJ portal (`Update_time`) and convert them to UTC before sending them to Home Assistant. Ensure you use a valid timezone name from the TZ database (e.g., `America/Sao_Paulo`, `Europe/Lisbon`, `Australia/Sydney`).
@@ -76,10 +74,16 @@ After installation, go to the **Configuration** tab of the add-on to set the req
 
 ## Common Troubleshooting
 
-- **Login Error:** Check your SAJ credentials. The SAJ Portal might have implemented CAPTCHAs or other protections that could break login via scraping. Check the logs for Timeout errors or elements not found.
-- **MQTT Connection Error:** Check the `mqtt_host`, `mqtt_port`, `mqtt_username`, `mqtt_password` settings. Ensure the broker is running and accessible. Check the Mosquitto broker logs as well.
+- **SAJ Login Error:** Confirm that the selected `base_saj_url` matches the portal where your account works and check that your account can sign in to that portal. The add-on uses the portal API; changes to its API or additional verification requirements may affect authentication.
+- **MQTT host cannot be resolved:** For the official Mosquitto broker add-on, set `mqtt_host` to `core-mosquitto` and `mqtt_port` to `1883`. A hostname such as `local-mosquitto` only works if it is resolvable from the add-on container.
+- **MQTT connection is not authorised:** The broker was reached, but rejected the client. Configure a valid MQTT username and password in the add-on options, or leave both blank to use Supervisor-provided MQTT credentials if available. Check the Mosquitto logs for the matching connection time.
+- **MQTT connection timeout or refusal:** Ensure the broker add-on is running, listening on the configured port, and available to this add-on. Check the Mosquitto logs at the same timestamp as the SAJ add-on log.
 - **Entities Not Appearing:** Check if the add-on is running, connected to MQTT, and if there are no errors in the logs. Verify that the MQTT integration in Home Assistant is configured correctly.
 - **Incorrect Times:** Check the `timezone` setting in the add-on. Ensure it matches your actual timezone and the name is correct. Check the add-on logs (in debug mode) to see how times are being processed and converted to UTC.
+
+## Latest Changes
+
+- **1.0.37:** Use the current SAJ portal login API and its password encryption, improve MQTT connection diagnostics, and document MQTT broker configuration and troubleshooting.
 
 ## License
 

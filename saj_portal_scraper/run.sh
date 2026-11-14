@@ -28,8 +28,8 @@ date
 #echo "[run.sh] Starting with debugpy on port 5678. Waiting for debugger connection..."
 #exec python3 -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/run.py
 ############################ OLD CODE ############################
-echo "[run.sh] SUPERVISOR_TOKEN: $SUPERVISOR_TOKEN"
-echo "[run.sh] SUPERVISOR_TOKEN (raw): ${SUPERVISOR_TOKEN}"
+#echo "[run.sh] SUPERVISOR_TOKEN: $SUPERVISOR_TOKEN"
+#echo "[run.sh] SUPERVISOR_TOKEN (raw): ${SUPERVISOR_TOKEN}"
 
 DEBUG_MODE=$(jq --raw-output '.debug_mode // false' $CONFIG_PATH)
 
